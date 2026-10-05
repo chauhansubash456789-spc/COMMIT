@@ -1247,3 +1247,21 @@ async function loadAdminAuditLogs() {
 document.addEventListener('DOMContentLoaded', () => {
   initAuth();
 });
+
+// -------------------------------------------------------------
+// 1-Click Demo Accounts Quick Login Helper
+// -------------------------------------------------------------
+window.fillDemoLogin = function(email, password) {
+  if (typeof switchAuthTab === 'function') switchAuthTab('signin');
+  const emailInput = document.getElementById('loginEmail');
+  const passInput = document.getElementById('loginPassword');
+  if (emailInput && passInput) {
+    emailInput.value = email;
+    passInput.value = password;
+    const form = document.getElementById('formSignIn');
+    if (form) {
+      const submitEvt = new Event('submit', { cancelable: true });
+      form.dispatchEvent(submitEvt);
+    }
+  }
+};

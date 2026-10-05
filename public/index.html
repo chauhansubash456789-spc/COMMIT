@@ -533,6 +533,28 @@
       <div class="auth-body">
         <div id="authAlert" class="auth-alert-box"></div>
 
+        <!-- QUICK DEMO LOGINS -->
+        <div class="demo-accounts-box" style="margin-bottom:1rem;padding:0.75rem;background:rgba(0,240,255,0.04);border:1px dashed rgba(0,240,255,0.25);border-radius:8px;">
+          <div style="font-size:0.75rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.5rem;display:flex;align-items:center;justify-content:space-between;">
+            <span style="display:flex;align-items:center;gap:0.35rem;">⚡ <strong>1-Click Demo Accounts</strong></span>
+            <span class="badge-pill" style="font-size:0.65rem;background:rgba(20,241,149,0.15);color:var(--sol-emerald);padding:0.15rem 0.4rem;border-radius:4px;">Ready</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(4, 1fr);gap:0.35rem;">
+            <button type="button" class="btn btn-outline btn-sm" onclick="fillDemoLogin('alice@commit.fun', 'Demo1234!')" style="font-size:0.7rem;padding:0.4rem 0.15rem;text-align:center;border-color:rgba(0,240,255,0.3);line-height:1.2;" title="Alice: Goal Creator / Staker">
+              👤 <strong>Alice</strong><br><span style="font-size:0.62rem;color:var(--text-muted)">Creator</span>
+            </button>
+            <button type="button" class="btn btn-outline btn-sm" onclick="fillDemoLogin('bob@commit.fun', 'Demo1234!')" style="font-size:0.7rem;padding:0.4rem 0.15rem;text-align:center;border-color:rgba(20,241,149,0.3);line-height:1.2;" title="Bob: Accredited Verifier">
+              🛡️ <strong>Bob</strong><br><span style="font-size:0.62rem;color:var(--text-muted)">Verifier</span>
+            </button>
+            <button type="button" class="btn btn-outline btn-sm" onclick="fillDemoLogin('admin@commit.fun', 'Demo1234!')" style="font-size:0.7rem;padding:0.4rem 0.15rem;text-align:center;border-color:rgba(153,69,255,0.3);line-height:1.2;" title="Charlie: Protocol Admin">
+              ⚡ <strong>Charlie</strong><br><span style="font-size:0.62rem;color:var(--text-muted)">Admin</span>
+            </button>
+            <button type="button" class="btn btn-outline btn-sm" onclick="fillDemoLogin('david@commit.fun', 'Demo1234!')" style="font-size:0.7rem;padding:0.4rem 0.15rem;text-align:center;border-color:rgba(255,184,0,0.3);line-height:1.2;" title="David: Goal Achiever">
+              🎯 <strong>David</strong><br><span style="font-size:0.62rem;color:var(--text-muted)">Achiever</span>
+            </button>
+          </div>
+        </div>
+
         <!-- SIGN IN FORM -->
         <form id="formSignIn" onsubmit="handleSignIn(event)">
           <div class="auth-input-group">
