@@ -35,15 +35,15 @@
 
       <div class="wallet-badge" title="Click to Request Devnet Airdrop" onclick="requestAirdrop()">
         <span class="wallet-balance" id="walletUsdc">250.00 USDC</span>
-        <span style="color:var(--border-subtle)">|</span>
-        <span class="wallet-balance" style="color:var(--sol-purple)" id="walletSol">4.82 SOL</span>
+        <span class="wallet-separator">|</span>
+        <span class="wallet-balance wallet-balance-purple" id="walletSol">4.82 SOL</span>
         <span class="wallet-address" id="walletAddress">H4cK...3111</span>
-        <button class="btn btn-primary btn-sm" style="padding:0.2rem 0.6rem;font-size:0.7rem;margin-left:0.25rem;">+ Airdrop</button>
+        <button class="btn btn-primary btn-sm btn-airdrop">+ Airdrop</button>
       </div>
 
       <!-- AUTH USER / LOGIN SECTION -->
-      <div id="authHeaderSection" style="display:flex;align-items:center;gap:0.5rem;">
-        <button class="btn btn-outline btn-sm" id="btnOpenAuth" onclick="openAuthModal('signin')" style="border-color:rgba(0,240,255,0.4);color:var(--sol-cyan);">
+      <div id="authHeaderSection" class="auth-header-section">
+        <button class="btn btn-outline btn-sm btn-open-auth" id="btnOpenAuth" onclick="openAuthModal('signin')">
           <span>🔑 Sign In / Register</span>
         </button>
       </div>
@@ -61,14 +61,14 @@
     </button>
     <button class="nav-tab-btn" data-tab="tab-study">
       <span>⏱️ Deep Work Studio</span>
-      <span class="badge-pill" style="background:rgba(20,241,149,0.2);color:var(--sol-emerald)">Live Heartbeats</span>
+      <span class="badge-pill badge-pill-emerald">Live Heartbeats</span>
     </button>
     <button class="nav-tab-btn" data-tab="tab-github">
       <span>🐙 GitHub Verifier</span>
     </button>
     <button class="nav-tab-btn" data-tab="tab-peer">
       <span>👥 Peer Verifier Portal</span>
-      <span class="badge-pill" style="background:rgba(0,240,255,0.2);color:var(--sol-cyan)">Blockhash</span>
+      <span class="badge-pill badge-pill-cyan">Blockhash</span>
     </button>
     <button class="nav-tab-btn" data-tab="tab-blinks">
       <span>🔗 Solana Blinks (Actions)</span>
@@ -76,9 +76,9 @@
     <button class="nav-tab-btn" data-tab="tab-demos">
       <span>🧪 1-Click Hackathon Demos</span>
     </button>
-    <button class="nav-tab-btn" data-tab="tab-admin" id="navTabAdmin" style="display:none;">
+    <button class="nav-tab-btn hidden" data-tab="tab-admin" id="navTabAdmin">
       <span>🛡️ Admin Audit Logs</span>
-      <span class="badge-pill" style="background:rgba(245,158,11,0.2);color:#fbbf24">RLS</span>
+      <span class="badge-pill badge-pill-amber">RLS</span>
     </button>
   </nav>
 
@@ -113,8 +113,8 @@
         </div>
       </div>
 
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
-        <h3 style="font-size:1.25rem;font-weight:700;">Active Commitments & Escrows</h3>
+      <div class="section-header-row">
+        <h3 class="section-title-sm">Active Commitments & Escrows</h3>
         <button class="btn btn-primary btn-sm" onclick="document.querySelector('[data-tab=\'tab-wizard\']').click()">+ New Commitment</button>
       </div>
 
@@ -126,19 +126,19 @@
     <!-- TAB 2: CREATE WIZARD -->
     <section id="tab-wizard" class="tab-pane">
       <!-- LOCKED CARD WHEN NOT LOGGED IN -->
-      <div id="wizardAuthRequiredCard" class="wizard-card" style="text-align:center;padding:3.5rem 1.5rem;">
-        <div style="font-size:3rem;margin-bottom:1rem;">🔒</div>
-        <h3 style="font-size:1.4rem;font-weight:700;margin-bottom:0.5rem;">Authentication Required</h3>
-        <p style="color:var(--text-muted);max-width:440px;margin:0 auto 1.5rem;font-size:0.95rem;line-height:1.5;">
+      <div id="wizardAuthRequiredCard" class="wizard-card wizard-auth-card">
+        <div class="wizard-lock-icon">🔒</div>
+        <h3 class="wizard-auth-title">Authentication Required</h3>
+        <p class="wizard-auth-desc">
           You must be logged in to create commitments and lock USDC behind your promises. Sign in or register to get started.
         </p>
-        <button class="btn btn-primary" onclick="openAuthModal('signin')" style="padding:0.75rem 2rem;font-weight:700;font-size:0.95rem;">
+        <button class="btn btn-primary btn-auth-lock-action" onclick="openAuthModal('signin')">
           🔑 Sign In / Register to Create
         </button>
       </div>
 
       <!-- ACTIVE WIZARD FORM WHEN LOGGED IN -->
-      <div id="wizardFormCard" class="wizard-card" style="display:none;">
+      <div id="wizardFormCard" class="wizard-card hidden">
         <div class="wizard-steps">
           <div class="wizard-step-node active">
             <div class="step-number">1</div>
@@ -187,22 +187,22 @@
             </div>
           </div>
 
-          <div class="form-group" style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+          <div class="form-group form-grid-2col">
             <div>
               <label class="form-label">Stake Amount (USDC)</label>
               <input type="number" id="wizardStake" class="form-input" min="5" value="25" required>
             </div>
             <div>
               <label class="form-label">Verifier Network Fee</label>
-              <input type="text" class="form-input" value="1.50 USDC" disabled style="opacity:0.7">
+              <input type="text" class="form-input input-dimmed" value="1.50 USDC" disabled>
             </div>
           </div>
 
-          <div class="consequence-box" id="wizardConsequencePreview" style="margin:1.5rem 0;">
+          <div class="consequence-box wizard-preview-box" id="wizardConsequencePreview">
             <!-- Updated dynamically -->
           </div>
 
-          <button type="submit" class="btn btn-primary btn-full" style="padding:1rem;">
+          <button type="submit" class="btn btn-primary btn-full btn-submit-large">
             🔒 Lock USDC & Initialize Solana Escrow Contract
           </button>
         </form>
@@ -211,9 +211,9 @@
 
     <!-- TAB 3: DEEP WORK FOCUS STUDIO -->
     <section id="tab-study" class="tab-pane">
-      <div style="margin-bottom:1.5rem;">
-        <h2 style="font-size:1.6rem;font-weight:800;">Deep Work & Focus Terminal</h2>
-        <p style="color:var(--text-muted);font-size:0.9rem;">
+      <div class="tab-header-box">
+        <h2 class="tab-main-title">Deep Work & Focus Terminal</h2>
+        <p class="tab-subtitle">
           Cryptographically verified study sessions. The client and server exchange rotating Ed25519 nonces every heartbeat.
           Idle time and tab blurs are recorded to prevent cheating.
         </p>
@@ -226,21 +226,21 @@
             <div class="timer-status-badge" id="timerStatusBadge">READY TO FOCUS</div>
           </div>
 
-          <div style="display:flex;gap:1rem;width:100%;max-width:380px;">
+          <div class="timer-btn-row">
             <button class="btn btn-primary btn-full" id="startFocusBtn">▶️ Start Focus Session</button>
             <button class="btn btn-purple btn-full" id="finishFocusBtn">🏁 Finish & Attest</button>
           </div>
         </div>
 
         <div>
-          <h4 style="font-size:0.95rem;margin-bottom:0.75rem;">Cryptographic Nonce & Heartbeat Feed</h4>
+          <h4 class="feed-title">Cryptographic Nonce & Heartbeat Feed</h4>
           <div class="heartbeat-pulse-feed" id="heartbeatLog">
             <div>[System] Focus terminal initialized. Awaiting session start...</div>
           </div>
 
-          <div style="margin-top:1.5rem;background:var(--bg-glass-card);border:1px solid var(--border-subtle);border-radius:var(--radius-md);padding:1.25rem;">
-            <h5 style="font-size:0.85rem;color:var(--sol-emerald);margin-bottom:0.5rem;">Anti-Cheating Architecture</h5>
-            <p style="font-size:0.78rem;color:var(--text-muted);line-height:1.4;">
+          <div class="info-callout-card">
+            <h5 class="callout-title">Anti-Cheating Architecture</h5>
+            <p class="callout-body">
               1. Nonce Rotation: Each heartbeat requires the previous server-generated nonce.<br>
               2. Visibility API: Switching tabs marks session as idle.<br>
               3. Ed25519 Attestation: Upon completion, the Oracle signs the verified duration.
@@ -252,16 +252,16 @@
 
     <!-- TAB 4: GITHUB VERIFIER STUDIO -->
     <section id="tab-github" class="tab-pane">
-      <div style="margin-bottom:1.5rem;">
-        <h2 style="font-size:1.6rem;font-weight:800;">Automated GitHub Commitment Verifier</h2>
-        <p style="color:var(--text-muted);font-size:0.9rem;">
+      <div class="tab-header-box">
+        <h2 class="tab-main-title">Automated GitHub Commitment Verifier</h2>
+        <p class="tab-subtitle">
           Connect your GitHub repository and author identity. The verifier filters merge commits, ensures unique SHAs,
           and signs an Ed25519 attestation to trigger Solana settlement.
         </p>
       </div>
 
-      <div style="background:var(--bg-glass-card);border:1px solid var(--border-subtle);border-radius:var(--radius-lg);padding:2rem;max-width:800px;margin:0 auto;">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem;">
+      <div class="verifier-card-container">
+        <div class="form-grid-2col-spaced">
           <div>
             <label class="form-label">Repository</label>
             <input type="text" class="form-input" value="solana-labs/solana" id="ghRepoInput">
@@ -272,18 +272,18 @@
           </div>
         </div>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem;">
+        <div class="form-grid-2col-spaced">
           <div>
             <label class="form-label">Required Qualifying Commits</label>
             <input type="number" class="form-input" value="5" id="ghRequiredInput">
           </div>
           <div>
             <label class="form-label">Timeframe Window</label>
-            <input type="text" class="form-input" value="Last 7 Days (Oct 1 - Oct 8)" disabled style="opacity:0.7">
+            <input type="text" class="form-input input-dimmed" value="Last 7 Days (Oct 1 - Oct 8)" disabled>
           </div>
         </div>
 
-        <div class="consequence-box" style="margin-bottom:1.5rem;">
+        <div class="consequence-box consequence-box-spaced">
           <strong>Commitment Target:</strong> 20 USDC Escrowed. 5 Commits Required.<br>
           • Pass: 20 USDC released to your wallet.<br>
           • Fail: 15 USDC returned, 5 USDC to Developer Education Pool.
@@ -299,81 +299,81 @@
 
     <!-- TAB 5: PEER VERIFIER PORTAL -->
     <section id="tab-peer" class="tab-pane">
-      <div style="margin-bottom:1.5rem;">
-        <h2 style="font-size:1.6rem;font-weight:800;">Decentralized Remote Peer Verifier Portal</h2>
-        <p style="color:var(--text-muted);font-size:0.9rem;">
+      <div class="tab-header-box">
+        <h2 class="tab-main-title">Decentralized Remote Peer Verifier Portal</h2>
+        <p class="tab-subtitle">
           Verifying real-world physical tasks without dangerous in-person travel.
           Users submit ephemeral proof stamped with today's live <strong>Solana Blockhash Challenge</strong>.
           3 bonded peer verifiers review proof; 2-of-3 consensus triggers automatic payout.
         </p>
       </div>
 
-      <div style="display:grid;grid-template-columns:320px 1fr;gap:1.5rem;">
+      <div class="peer-portal-layout">
         <!-- Verifier Profile -->
-        <div style="background:var(--bg-glass-card);border:1px solid var(--border-subtle);border-radius:var(--radius-lg);padding:1.5rem;">
-          <div style="text-align:center;margin-bottom:1.25rem;">
-            <div style="width:64px;height:64px;border-radius:50%;background:var(--gradient-cyber);margin:0 auto 0.75rem;display:flex;align-items:center;justify-content:center;font-size:1.5rem;">👨‍💻</div>
-            <h3 style="font-size:1.15rem;font-weight:700;">Alex M.</h3>
-            <div style="color:var(--sol-amber);font-size:0.85rem;">★★★★★ 4.9 (128 reviews)</div>
-            <span class="badge-pill" style="background:rgba(20,241,149,0.15);color:var(--sol-emerald);margin-top:0.5rem;display:inline-block;">Verified Expert</span>
+        <div class="peer-profile-panel">
+          <div class="peer-avatar-center">
+            <div class="peer-avatar-circle">👨‍💻</div>
+            <h3 class="peer-name">Alex M.</h3>
+            <div class="peer-rating">★★★★★ 4.9 (128 reviews)</div>
+            <span class="badge-pill badge-expert">Verified Expert</span>
           </div>
 
-          <div style="border-top:1px solid var(--border-subtle);padding-top:1rem;font-size:0.82rem;">
-            <div style="display:flex;justify-content:space-between;margin-bottom:0.5rem;">
-              <span style="color:var(--text-muted)">Accuracy:</span>
-              <span style="font-weight:700;color:var(--sol-emerald)">96%</span>
+          <div class="peer-stats-list">
+            <div class="peer-stat-row">
+              <span class="text-muted">Accuracy:</span>
+              <span class="text-emerald-bold">96%</span>
             </div>
-            <div style="display:flex;justify-content:space-between;margin-bottom:0.5rem;">
-              <span style="color:var(--text-muted)">Completed:</span>
-              <span style="font-weight:700;">128 Tasks</span>
+            <div class="peer-stat-row">
+              <span class="text-muted">Completed:</span>
+              <span class="text-bold">128 Tasks</span>
             </div>
-            <div style="display:flex;justify-content:space-between;margin-bottom:0.5rem;">
-              <span style="color:var(--text-muted)">Dispute Rate:</span>
-              <span style="font-weight:700;color:var(--sol-cyan)">1.8%</span>
+            <div class="peer-stat-row">
+              <span class="text-muted">Dispute Rate:</span>
+              <span class="text-cyan-bold">1.8%</span>
             </div>
-            <div style="display:flex;justify-content:space-between;">
-              <span style="color:var(--text-muted)">Total Earned:</span>
-              <span style="font-weight:700;color:var(--sol-emerald)">84.50 USDC</span>
+            <div class="peer-stat-row-last">
+              <span class="text-muted">Total Earned:</span>
+              <span class="text-emerald-bold">84.50 USDC</span>
             </div>
           </div>
         </div>
 
         <!-- Verification Review Queue -->
-        <div style="background:var(--bg-glass-card);border:1px solid var(--border-subtle);border-radius:var(--radius-lg);padding:1.5rem;">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
-            <h3 style="font-size:1.15rem;font-weight:700;">Active Verification Task: Electronics Lab Organization</h3>
+        <div class="peer-profile-panel">
+          <div class="section-header-row">
+            <h3 class="peer-name">Active Verification Task: Electronics Lab Organization</h3>
             <span class="mode-badge hardcore">Hardcore (30 USDC)</span>
           </div>
 
-          <div style="background:rgba(0,0,0,0.4);border:1px solid var(--border-subtle);border-radius:var(--radius-md);padding:1rem;margin-bottom:1.25rem;">
-            <div style="display:flex;justify-content:space-between;margin-bottom:0.5rem;">
-              <span style="color:var(--text-muted);font-size:0.8rem;">Dynamic Blockhash Challenge:</span>
-              <span style="font-family:var(--font-mono);font-weight:700;color:var(--sol-cyan)" id="peerChallengeCode">SOL-7Z8z9x</span>
+          <div class="challenge-code-panel">
+            <div class="peer-stat-row">
+              <span class="challenge-code-label">Dynamic Blockhash Challenge:</span>
+              <span class="challenge-code-val" id="peerChallengeCode">SOL-7Z8z9x</span>
             </div>
-            <p style="font-size:0.8rem;color:var(--text-muted);">
+            <p class="challenge-code-desc">
               User must display this challenge code in their photo/video proof to prevent pre-recorded evidence reuse.
             </p>
           </div>
 
-          <div style="margin-bottom:1.25rem;">
-            <h5 style="font-size:0.85rem;margin-bottom:0.5rem;">Task Checklist & Requirements:</h5>
-            <div style="font-size:0.82rem;color:var(--text-muted);line-height:1.6;">
+          <div class="task-checklist-panel">
+            <h5 class="task-checklist-title">Task Checklist & Requirements:</h5>
+            <div class="task-checklist-items">
               <div>✅ Work surface cleaned & components categorized</div>
               <div>✅ Dynamic Blockhash challenge code visible in frame</div>
               <div>✅ Timestamp matches Solana Devnet slot window</div>
             </div>
           </div>
 
-          <div style="margin-bottom:1rem;">
-            <label class="form-label" style="font-size:0.8rem;">Select Reviewing Verifier Key:</label>
-            <select id="peerVerifierSelect" class="form-select" style="padding:0.5rem;">
+          <div class="form-select-group">
+            <label class="form-label form-label-sm">Select Reviewing Verifier Key:</label>
+            <select id="peerVerifierSelect" class="form-select form-select-sm">
               <option value="v_alex">Alex M. (Expert Verifier - 4.9★)</option>
               <option value="v_elena">Elena R. (Verified Verifier - 4.8★)</option>
               <option value="v_chen">Chen W. (Master Verifier - 5.0★)</option>
             </select>
           </div>
 
-          <div style="display:flex;gap:1rem;">
+          <div class="btn-row-gap">
             <button class="btn btn-primary btn-full" onclick="castPeerVote('v_alex', 'PASS')">
               ✅ Vote PASS (Earn 1.50 USDC Reward)
             </button>
@@ -389,9 +389,9 @@
 
     <!-- TAB 6: SOLANA BLINKS SIMULATOR -->
     <section id="tab-blinks" class="tab-pane">
-      <div style="margin-bottom:1.5rem;">
-        <h2 style="font-size:1.6rem;font-weight:800;">Solana Blinks (Actions) Social Integration</h2>
-        <p style="color:var(--text-muted);font-size:0.9rem;">
+      <div class="tab-header-box">
+        <h2 class="tab-main-title">Solana Blinks (Actions) Social Integration</h2>
+        <p class="tab-subtitle">
           Commitments can be shared directly into X (Twitter) or Telegram feeds.
           Users can fund and challenge commitments with a single click in their wallet via the official Solana Actions protocol.
         </p>
@@ -402,12 +402,12 @@
           <div class="twitter-avatar"></div>
           <div class="twitter-meta">
             <div>Solana Builder <span>@solanabuilder · 2m</span></div>
-            <div style="color:#fff;margin-top:0.25rem;">Putting my money where my mouth is! 20 USDC locked into @commit_solana to ship 5 PRs this week. Settle with me! 👇</div>
+            <div class="twitter-tweet-text">Putting my money where my mouth is! 20 USDC locked into @commit_solana to ship 5 PRs this week. Settle with me! 👇</div>
           </div>
         </div>
 
         <div class="blink-card-embed">
-          <div class="blink-banner-img" style="background:var(--gradient-dark);display:flex;align-items:center;justify-content:center;color:var(--sol-purple);font-size:2.5rem;font-weight:900;">
+          <div class="blink-banner-img blink-banner-custom">
             COMMIT // SOLANA
           </div>
           <div class="blink-card-body">
@@ -428,9 +428,9 @@
 
     <!-- TAB 7: HACKATHON DEMOS -->
     <section id="tab-demos" class="tab-pane">
-      <div style="margin-bottom:1.5rem;">
-        <h2 style="font-size:1.6rem;font-weight:800;">Colosseum Hackathon 1-Click Demos</h2>
-        <p style="color:var(--text-muted);font-size:0.9rem;">
+      <div class="tab-header-box">
+        <h2 class="tab-main-title">Colosseum Hackathon 1-Click Demos</h2>
+        <p class="tab-subtitle">
           Run deterministic, verifiable end-to-end demonstrations of the entire protocol.
           Each scenario executes real Ed25519 cryptographic signing, SHA-256 evidence hashing, and Solana Devnet settlement.
         </p>
@@ -441,8 +441,8 @@
         <div class="commit-card">
           <div>
             <span class="mode-badge hardcore">Scenario 1</span>
-            <h3 class="card-title" style="margin-top:0.75rem;">Automated GitHub PASS</h3>
-            <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:1rem;">
+            <h3 class="card-title card-title-spaced">Automated GitHub PASS</h3>
+            <p class="demo-card-desc">
               • 5 required commits, 7 qualifying commits verified.<br>
               • Result: <strong>GH_PASS</strong><br>
               • Outcome: 20 USDC returned to creator wallet on Solana Devnet.
@@ -455,8 +455,8 @@
         <div class="commit-card">
           <div>
             <span class="mode-badge noloss">Scenario 2</span>
-            <h3 class="card-title" style="margin-top:0.75rem;">Deep Work Focus FAIL (No-Loss)</h3>
-            <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:1rem;">
+            <h3 class="card-title card-title-spaced">Deep Work Focus FAIL (No-Loss)</h3>
+            <p class="demo-card-desc">
               • 3 focus hours required, only 1 hour verified.<br>
               • Result: <strong>STUDY_FAIL</strong><br>
               • Outcome: Principal 100% safe! Accrued yield forfeited to reward pool.
@@ -469,8 +469,8 @@
         <div class="commit-card">
           <div>
             <span class="mode-badge hardcore">Scenario 3</span>
-            <h3 class="card-title" style="margin-top:0.75rem;">Remote Peer Consensus PASS</h3>
-            <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:1rem;">
+            <h3 class="card-title card-title-spaced">Remote Peer Consensus PASS</h3>
+            <p class="demo-card-desc">
               • Solana Blockhash code verified.<br>
               • 2-of-3 decentralized peer verifiers vote PASS.<br>
               • Outcome: 30 USDC returned + 1.50 USDC fee paid to verifier Alex.
@@ -483,16 +483,16 @@
 
     <!-- TAB: ADMIN AUDIT LOGS -->
     <section id="tab-admin" class="tab-pane">
-      <div class="glass-panel" style="padding:1.75rem;">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem;">
+      <div class="glass-panel admin-panel-padded">
+        <div class="admin-header-row">
           <div>
-            <h2 style="font-size:1.4rem;font-weight:700;color:#fff;">🛡️ Administrative Audit Trail</h2>
-            <p style="font-size:0.85rem;color:var(--text-muted);margin-top:0.25rem;">Authoritative immutable logs recorded in Supabase PostgreSQL</p>
+            <h2 class="admin-title">🛡️ Administrative Audit Trail</h2>
+            <p class="admin-subtitle">Authoritative immutable logs recorded in Supabase PostgreSQL</p>
           </div>
           <button class="btn btn-outline btn-sm" onclick="loadAdminAuditLogs()">🔄 Refresh Logs</button>
         </div>
 
-        <div style="overflow-x:auto;">
+        <div class="admin-table-scroll">
           <table class="admin-audit-table">
             <thead>
               <tr>
@@ -505,7 +505,7 @@
               </tr>
             </thead>
             <tbody id="adminAuditTableBody">
-              <tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:2rem;">Loading audit trail from Supabase...</td></tr>
+              <tr><td colspan="6" class="table-empty-cell">Loading audit trail from Supabase...</td></tr>
             </tbody>
           </table>
         </div>
@@ -532,9 +532,9 @@
     <div class="auth-modal-card">
       <div class="auth-modal-header">
         <div class="auth-modal-title">
-          <span style="color:var(--sol-cyan)">⚡</span> Commit Supabase Auth
+          <span class="modal-title-cyan">⚡</span> Commit Supabase Auth
         </div>
-        <button class="close-btn" onclick="closeAuthModal()" style="background:none;border:none;color:var(--text-muted);font-size:1.5rem;cursor:pointer;">&times;</button>
+        <button class="close-btn modal-close-icon" onclick="closeAuthModal()">&times;</button>
       </div>
 
       <div class="auth-tabs-row">
@@ -547,23 +547,23 @@
         <div id="authAlert" class="auth-alert-box"></div>
 
         <!-- QUICK DEMO LOGINS -->
-        <div class="demo-accounts-box" style="margin-bottom:1rem;padding:0.75rem;background:rgba(0,240,255,0.04);border:1px dashed rgba(0,240,255,0.25);border-radius:8px;">
-          <div style="font-size:0.75rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.5rem;display:flex;align-items:center;justify-content:space-between;">
-            <span style="display:flex;align-items:center;gap:0.35rem;">⚡ <strong>1-Click Demo Accounts</strong></span>
-            <span class="badge-pill" style="font-size:0.65rem;background:rgba(20,241,149,0.15);color:var(--sol-emerald);padding:0.15rem 0.4rem;border-radius:4px;">Ready</span>
+        <div class="demo-accounts-box">
+          <div class="demo-box-header">
+            <span class="demo-box-title">⚡ <strong>1-Click Demo Accounts</strong></span>
+            <span class="badge-pill badge-pill-ready">Ready</span>
           </div>
-          <div style="display:grid;grid-template-columns:repeat(4, 1fr);gap:0.35rem;">
-            <button type="button" class="btn btn-outline btn-sm" onclick="fillDemoLogin('alice@commit.fun', 'Demo1234!')" style="font-size:0.7rem;padding:0.4rem 0.15rem;text-align:center;border-color:rgba(0,240,255,0.3);line-height:1.2;" title="Alice: Goal Creator / Staker">
-              👤 <strong>Alice</strong><br><span style="font-size:0.62rem;color:var(--text-muted)">Creator</span>
+          <div class="demo-grid-4col">
+            <button type="button" class="btn btn-outline btn-sm btn-demo-alice" onclick="fillDemoLogin('alice@commit.fun', 'Demo1234!')" title="Alice: Goal Creator / Staker">
+              👤 <strong>Alice</strong><br><span class="demo-sublabel">Creator</span>
             </button>
-            <button type="button" class="btn btn-outline btn-sm" onclick="fillDemoLogin('bob@commit.fun', 'Demo1234!')" style="font-size:0.7rem;padding:0.4rem 0.15rem;text-align:center;border-color:rgba(20,241,149,0.3);line-height:1.2;" title="Bob: Accredited Verifier">
-              🛡️ <strong>Bob</strong><br><span style="font-size:0.62rem;color:var(--text-muted)">Verifier</span>
+            <button type="button" class="btn btn-outline btn-sm btn-demo-bob" onclick="fillDemoLogin('bob@commit.fun', 'Demo1234!')" title="Bob: Accredited Verifier">
+              🛡️ <strong>Bob</strong><br><span class="demo-sublabel">Verifier</span>
             </button>
-            <button type="button" class="btn btn-outline btn-sm" onclick="fillDemoLogin('admin@commit.fun', 'Demo1234!')" style="font-size:0.7rem;padding:0.4rem 0.15rem;text-align:center;border-color:rgba(153,69,255,0.3);line-height:1.2;" title="Charlie: Protocol Admin">
-              ⚡ <strong>Charlie</strong><br><span style="font-size:0.62rem;color:var(--text-muted)">Admin</span>
+            <button type="button" class="btn btn-outline btn-sm btn-demo-charlie" onclick="fillDemoLogin('admin@commit.fun', 'Demo1234!')" title="Charlie: Protocol Admin">
+              ⚡ <strong>Charlie</strong><br><span class="demo-sublabel">Admin</span>
             </button>
-            <button type="button" class="btn btn-outline btn-sm" onclick="fillDemoLogin('david@commit.fun', 'Demo1234!')" style="font-size:0.7rem;padding:0.4rem 0.15rem;text-align:center;border-color:rgba(255,184,0,0.3);line-height:1.2;" title="David: Goal Achiever">
-              🎯 <strong>David</strong><br><span style="font-size:0.62rem;color:var(--text-muted)">Achiever</span>
+            <button type="button" class="btn btn-outline btn-sm btn-demo-david" onclick="fillDemoLogin('david@commit.fun', 'Demo1234!')" title="David: Goal Achiever">
+              🎯 <strong>David</strong><br><span class="demo-sublabel">Achiever</span>
             </button>
           </div>
         </div>
@@ -578,13 +578,13 @@
             <label class="auth-label">Password</label>
             <input type="password" class="auth-input" id="loginPassword" required placeholder="••••••••" />
           </div>
-          <button type="submit" class="btn btn-primary" style="width:100%;margin-top:0.5rem;" id="btnLoginSubmit">
+          <button type="submit" class="btn btn-primary btn-auth-submit" id="btnLoginSubmit">
             Sign In to Commit
           </button>
         </form>
 
         <!-- SIGN UP FORM -->
-        <form id="formSignUp" onsubmit="handleSignUp(event)" style="display:none;">
+        <form id="formSignUp" class="hidden" onsubmit="handleSignUp(event)">
           <div class="auth-input-group">
             <label class="auth-label">Email Address</label>
             <input type="email" class="auth-input" id="signupEmail" required placeholder="you@example.com" />
@@ -605,18 +605,18 @@
             <label class="auth-label">Confirm Password</label>
             <input type="password" class="auth-input" id="signupConfirmPassword" required placeholder="••••••••" />
           </div>
-          <button type="submit" class="btn btn-primary" style="width:100%;margin-top:0.5rem;" id="btnSignupSubmit">
+          <button type="submit" class="btn btn-primary btn-auth-submit" id="btnSignupSubmit">
             Create Commit Account
           </button>
         </form>
 
         <!-- FORGOT PASSWORD FORM -->
-        <form id="formForgot" onsubmit="handleForgotPassword(event)" style="display:none;">
+        <form id="formForgot" class="hidden" onsubmit="handleForgotPassword(event)">
           <div class="auth-input-group">
             <label class="auth-label">Account Email Address</label>
             <input type="email" class="auth-input" id="forgotEmail" required placeholder="you@example.com" />
           </div>
-          <button type="submit" class="btn btn-primary" style="width:100%;margin-top:0.5rem;" id="btnForgotSubmit">
+          <button type="submit" class="btn btn-primary btn-auth-submit" id="btnForgotSubmit">
             Send Secure Reset Link
           </button>
         </form>
@@ -629,16 +629,16 @@
     <div class="auth-modal-card">
       <div class="auth-modal-header">
         <div class="auth-modal-title">
-          <span style="color:var(--sol-purple)">🛡️</span> Phantom Cryptographic Binding
+          <span class="modal-title-purple">🛡️</span> Phantom Cryptographic Binding
         </div>
-        <button class="close-btn" onclick="closeWalletModal()" style="background:none;border:none;color:var(--text-muted);font-size:1.5rem;cursor:pointer;">&times;</button>
+        <button class="close-btn modal-close-icon" onclick="closeWalletModal()">&times;</button>
       </div>
       <div class="auth-body">
-        <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:1rem;">
+        <p class="wallet-challenge-desc">
           Sign a server nonce challenge with Phantom to prove cryptographic wallet ownership. No private key or seed phrase is ever requested.
         </p>
         <div id="walletChallengeAlert" class="auth-alert-box"></div>
-        <button class="btn btn-primary" style="width:100%;" id="btnSignWalletAction" onclick="executeWalletSignatureChallenge()">
+        <button class="btn btn-primary btn-w-full" id="btnSignWalletAction" onclick="executeWalletSignatureChallenge()">
           ✍️ Sign Challenge with Phantom
         </button>
       </div>
