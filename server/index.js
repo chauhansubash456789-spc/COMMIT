@@ -171,28 +171,50 @@ app.post('/api/commitments/create', async (req, res) => {
     details
   } = req.body;
 
-  // Authenticated account status check (blocks suspended / disabled users)
-  if (req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
-    try {
-      const token = req.headers.authorization.split(' ')[1];
-      const { data: { user } } = await supabaseAdmin.auth.getUser(token);
-      if (user) {
-        const { data: profile } = await supabaseAdmin.from('user_profiles').select('*').eq('auth_user_id', user.id).single();
-        if (profile) {
-          if (profile.status === 'SUSPENDED') {
-            return res.status(403).json({ error: 'Account Suspended: Suspended users cannot create commitments.', status: 'SUSPENDED' });
-          }
-          if (profile.status === 'DISABLED') {
-            return res.status(403).json({ error: 'Account Disabled: Access permanently denied.', status: 'DISABLED' });
-          }
-          if (profile.wallet_address && creator && creator !== profile.wallet_address) {
-            return res.status(400).json({ error: 'Creator address must match your authenticated connected wallet' });
-          }
-        }
-      }
-    } catch (err) {
-      console.warn('Auth check in commitment creation:', err.message);
+  // MANDATORY AUTHENTICATION: Without login, no one can create commitments
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({
+      error: 'Authentication Required: You must be logged in to create a new commitment.'
+    });
+  }
+
+  const token = authHeader.split(' ')[1];
+  let authUser = null;
+  let profile = null;
+
+  try {
+    const { data: { user }, error: authErr } = await supabaseAdmin.auth.getUser(token);
+    if (authErr || !user) {
+      return res.status(401).json({
+        error: 'Invalid or expired session. Please log in to create a commitment.'
+      });
     }
+    authUser = user;
+
+    const { data: userProfile, error: profErr } = await supabaseAdmin
+      .from('user_profiles')
+      .select('*')
+      .eq('auth_user_id', user.id)
+      .single();
+
+    if (profErr || !userProfile) {
+      return res.status(403).json({ error: 'User profile not found. Access denied.' });
+    }
+    profile = userProfile;
+  } catch (err) {
+    return res.status(401).json({ error: 'Authentication verification failed: ' + err.message });
+  }
+
+  // Enforce account status server-side
+  if (profile.status === 'SUSPENDED') {
+    return res.status(403).json({ error: 'Account Suspended: Suspended users cannot create commitments.', status: 'SUSPENDED' });
+  }
+  if (profile.status === 'DISABLED') {
+    return res.status(403).json({ error: 'Account Disabled: Access permanently denied.', status: 'DISABLED' });
+  }
+  if (profile.wallet_address && creator && creator !== profile.wallet_address) {
+    return res.status(400).json({ error: 'Creator address must match your authenticated connected wallet' });
   }
 
   // Title validation

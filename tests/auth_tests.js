@@ -492,6 +492,28 @@ async function runAuthTests() {
     assert(Array.isArray(auditData.auditLogs) && auditData.auditLogs.length > 0, 'Audit trail contains logged actions');
 
     // -------------------------------------------------------------------------
+    // TEST 7.5: UNAUTHENTICATED COMMITMENT CREATION BLOCKED (HTTP 401)
+    // -------------------------------------------------------------------------
+    console.log('\n--- TEST 7.5: Unauthenticated Commitment Creation Strictly Blocked ---');
+    const unauthCommitRes = await fetch(`${BASE_URL}/api/commitments/create`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: 'Unauthenticated Commitment Attempt',
+        creator: 'AnyCreatorWallet11111111111111111111111111',
+        stakingMode: 'HARDCORE',
+        stakeAmount: 50,
+        verifierType: 'github',
+        failurePolicy: 'PARTIAL_EDUCATION_POOL',
+        details: { repoOwner: 'solana-labs', repoName: 'solana' }
+      })
+    });
+    assert(
+      unauthCommitRes.status === 401,
+      'Unauthenticated request to /api/commitments/create is strictly rejected (HTTP 401)'
+    );
+
+    // -------------------------------------------------------------------------
     // TEST 8: ACCOUNT STATUS ENFORCEMENT (SUSPENDED & DISABLED)
     // -------------------------------------------------------------------------
     console.log('\n--- TEST 8: Account Status Enforcement (SUSPENDED & DISABLED) ---');

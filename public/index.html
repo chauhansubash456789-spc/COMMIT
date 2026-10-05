@@ -125,7 +125,20 @@
 
     <!-- TAB 2: CREATE WIZARD -->
     <section id="tab-wizard" class="tab-pane">
-      <div class="wizard-card">
+      <!-- LOCKED CARD WHEN NOT LOGGED IN -->
+      <div id="wizardAuthRequiredCard" class="wizard-card" style="text-align:center;padding:3.5rem 1.5rem;">
+        <div style="font-size:3rem;margin-bottom:1rem;">🔒</div>
+        <h3 style="font-size:1.4rem;font-weight:700;margin-bottom:0.5rem;">Authentication Required</h3>
+        <p style="color:var(--text-muted);max-width:440px;margin:0 auto 1.5rem;font-size:0.95rem;line-height:1.5;">
+          You must be logged in to create commitments and lock USDC behind your promises. Sign in or register to get started.
+        </p>
+        <button class="btn btn-primary" onclick="openAuthModal('signin')" style="padding:0.75rem 2rem;font-weight:700;font-size:0.95rem;">
+          🔑 Sign In / Register to Create
+        </button>
+      </div>
+
+      <!-- ACTIVE WIZARD FORM WHEN LOGGED IN -->
+      <div id="wizardFormCard" class="wizard-card" style="display:none;">
         <div class="wizard-steps">
           <div class="wizard-step-node active">
             <div class="step-number">1</div>

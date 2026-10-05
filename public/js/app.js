@@ -110,11 +110,25 @@ document.addEventListener('DOMContentLoaded', async () => {
 function setupNavigation() {
   const tabBtns = document.querySelectorAll('.nav-tab-btn');
   tabBtns.forEach(btn => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', (e) => {
+      const targetTab = btn.getAttribute('data-tab');
+
+      // GUARD: Without login, no one can create commitments
+      if (targetTab === 'tab-wizard' && (!state.auth || !state.auth.token)) {
+        e.preventDefault();
+        openAuthModal('signin');
+        const alertBox = document.getElementById('authAlert');
+        if (alertBox) {
+          alertBox.className = 'auth-alert-box error';
+          alertBox.style.display = 'block';
+          alertBox.textContent = '🔒 Authentication Required: You must be logged in to create a commitment.';
+        }
+        return;
+      }
+
       tabBtns.forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
 
-      const targetTab = btn.getAttribute('data-tab');
       document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
       const activePane = document.getElementById(targetTab);
       if (activePane) activePane.classList.add('active');
@@ -297,6 +311,18 @@ function updateWizardPreview() {
 }
 
 async function handleCreateCommitment() {
+  // STRICT GUARD: Must be authenticated
+  if (!state.auth || !state.auth.token) {
+    openAuthModal('signin');
+    const alertBox = document.getElementById('authAlert');
+    if (alertBox) {
+      alertBox.className = 'auth-alert-box error';
+      alertBox.style.display = 'block';
+      alertBox.textContent = '🔒 Authentication Required: You must be logged in to create a commitment.';
+    }
+    return;
+  }
+
   const title = document.getElementById('wizardTitle').value;
   const verifierType = document.getElementById('wizardVerifier').value;
   const stakeAmount = Number(document.getElementById('wizardStake').value);

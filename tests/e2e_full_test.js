@@ -266,7 +266,10 @@ async function runFullE2ETest() {
     console.log('\n📦 [7/8] PEER CONSENSUS VERIFIER & 2/3 THRESHOLD VOTING');
     const peerRes = await fetch(`${BASE_URL}/api/commitments/create`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${userToken}`
+      },
       body: JSON.stringify({
         title: 'Peer Consensus Community Challenge',
         creator: walletPubkey,
