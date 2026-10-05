@@ -1,0 +1,1 @@
+SELECT trigger_name, event_object_schema, event_object_table FROM information_schema.triggers WHERE trigger_name = 'trg_prevent_profile_escalation';

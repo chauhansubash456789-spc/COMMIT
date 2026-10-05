@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Environment Secrets
+.env
+.env.local
+.env.*.local
+
+# Rust & Solana Build Artifacts
+target/
+.anchor/
+test-ledger/
+
+# Logs
+*.log
+npm-debug.log*
+
+# System & IDE
+.DS_Store
+Thumbs.db
+.system_generated/
+.tempmediaStorage/
