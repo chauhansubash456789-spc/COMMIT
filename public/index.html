@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,7 +7,7 @@
   <meta name="description" content="A Solana-native financial commitment & verification protocol with Blinks, No-Loss Staking, and Decentralized Attestations.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -18,7 +18,7 @@
       <div class="brand-logo-icon">⚡</div>
       <div class="brand-text">
         <h1>COMMIT</h1>
-        <p>Solana Verification Protocol</p>
+        <span class="site-selector-pill">PROTOCOL // SOLANA ▾</span>
       </div>
     </div>
 
@@ -28,9 +28,10 @@
         <span id="themeToggleIcon">🌙</span>
         <span id="themeToggleText">Dark</span>
       </button>
+      <button class="utility-circle-btn" title="Live Protocol Activity">🔔</button>
       <div class="network-pill">
         <div class="network-dot"></div>
-        <span>Solana Devnet</span>
+        <span>Devnet</span>
       </div>
 
       <div class="wallet-badge" title="Click to Request Devnet Airdrop" onclick="requestAirdrop()">
@@ -44,41 +45,37 @@
       <!-- AUTH USER / LOGIN SECTION -->
       <div id="authHeaderSection" class="auth-header-section">
         <button class="btn btn-outline btn-sm btn-open-auth" id="btnOpenAuth" onclick="openAuthModal('signin')">
-          <span>🔑 Sign In / Register</span>
+          <span>🔑 Sign In</span>
         </button>
       </div>
     </div>
   </header>
 
   <!-- NAVIGATION TABS -->
-  <nav class="nav-tabs">
+  <nav class="nav-tabs" aria-label="Main Navigation">
     <button class="nav-tab-btn active" data-tab="tab-dashboard">
-      <span>⚡ Dashboard & Feed</span>
+      <span>⚡ Dashboard</span>
     </button>
     <button class="nav-tab-btn" data-tab="tab-wizard">
-      <span>🎯 Create Commitment</span>
-      <span class="badge-pill">Wizard</span>
+      <span>＋ Commit</span>
     </button>
     <button class="nav-tab-btn" data-tab="tab-study">
-      <span>⏱️ Deep Work Studio</span>
-      <span class="badge-pill badge-pill-emerald">Live Heartbeats</span>
+      <span>⏱️ Focus</span>
     </button>
     <button class="nav-tab-btn" data-tab="tab-github">
-      <span>🐙 GitHub Verifier</span>
+      <span>🐙 GitHub</span>
     </button>
     <button class="nav-tab-btn" data-tab="tab-peer">
-      <span>👥 Peer Verifier Portal</span>
-      <span class="badge-pill badge-pill-cyan">Blockhash</span>
+      <span>👥 Peer</span>
     </button>
     <button class="nav-tab-btn" data-tab="tab-blinks">
-      <span>🔗 Solana Blinks (Actions)</span>
+      <span>🔗 Blinks</span>
     </button>
     <button class="nav-tab-btn" data-tab="tab-demos">
-      <span>🧪 1-Click Hackathon Demos</span>
+      <span>🧪 Demos</span>
     </button>
     <button class="nav-tab-btn hidden" data-tab="tab-admin" id="navTabAdmin">
-      <span>🛡️ Admin Audit Logs</span>
-      <span class="badge-pill badge-pill-amber">RLS</span>
+      <span>🛡️ Admin</span>
     </button>
   </nav>
 
@@ -98,16 +95,28 @@
           </div>
           <div class="hero-stats">
             <div class="stat-box">
-              <div class="stat-label">Total Committed</div>
-              <div class="stat-value highlight-emerald" id="statTotalCommitted">150 USDC</div>
+              <div class="stat-top-row">
+                <span class="stat-label">Total Committed</span>
+                <span class="badge-pill badge-pill-emerald">+18.4%</span>
+              </div>
+              <div class="stat-value" id="statTotalCommitted">150 USDC</div>
+              <div class="stat-micro-desc">Locked in Solana Escrow PDAs</div>
             </div>
             <div class="stat-box">
-              <div class="stat-label">Active Contracts</div>
-              <div class="stat-value highlight-purple" id="statActiveCount">3</div>
+              <div class="stat-top-row">
+                <span class="stat-label">Active Contracts</span>
+                <span class="badge-pill badge-pill-dark">Live Escrow</span>
+              </div>
+              <div class="stat-value text-inverted" id="statActiveCount">3</div>
+              <div class="stat-micro-desc">Autonomous Oracle Verified</div>
             </div>
             <div class="stat-box">
-              <div class="stat-label">Success Rate</div>
+              <div class="stat-top-row">
+                <span class="stat-label">Protocol Success</span>
+                <span class="badge-pill badge-pill-emerald">+2.4% All-Time</span>
+              </div>
               <div class="stat-value" id="statSuccessRate">94%</div>
+              <div class="stat-micro-desc">Settlement Accuracy</div>
             </div>
           </div>
         </div>

@@ -3,7 +3,7 @@
 // THEME CONTROLLER (DEFAULT LIGHT THEME)
 // =============================================================================
 function initTheme() {
-  const saved = localStorage.getItem('commit_theme') || 'light';
+  const saved = localStorage.getItem('commit_theme') || 'dark';
   setTheme(saved);
 }
 
