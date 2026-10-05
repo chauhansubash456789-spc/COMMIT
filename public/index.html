@@ -547,23 +547,39 @@
         <div id="authAlert" class="auth-alert-box"></div>
 
         <!-- QUICK DEMO LOGINS -->
-        <div class="demo-accounts-box">
+        <div class="demo-accounts-box" id="authDemoAccountsBox">
           <div class="demo-box-header">
             <span class="demo-box-title">⚡ <strong>1-Click Demo Accounts</strong></span>
             <span class="badge-pill badge-pill-ready">Ready</span>
           </div>
-          <div class="demo-grid-4col">
-            <button type="button" class="btn btn-outline btn-sm btn-demo-alice" onclick="fillDemoLogin('alice@commit.fun', 'Demo1234!')" title="Alice: Goal Creator / Staker">
-              👤 <strong>Alice</strong><br><span class="demo-sublabel">Creator</span>
+          <div class="demo-grid-2x2">
+            <button type="button" class="btn-demo-card" onclick="fillDemoLogin('alice@commit.fun', 'Demo1234!')" title="Alice: Goal Creator / Staker">
+              <span class="demo-card-icon">👤</span>
+              <div class="demo-card-info">
+                <span class="demo-card-name">Alice Vance</span>
+                <span class="demo-card-role">Creator</span>
+              </div>
             </button>
-            <button type="button" class="btn btn-outline btn-sm btn-demo-bob" onclick="fillDemoLogin('bob@commit.fun', 'Demo1234!')" title="Bob: Accredited Verifier">
-              🛡️ <strong>Bob</strong><br><span class="demo-sublabel">Verifier</span>
+            <button type="button" class="btn-demo-card" onclick="fillDemoLogin('bob@commit.fun', 'Demo1234!')" title="Bob: Accredited Verifier">
+              <span class="demo-card-icon">🛡️</span>
+              <div class="demo-card-info">
+                <span class="demo-card-name">Bob Chen</span>
+                <span class="demo-card-role">Verifier</span>
+              </div>
             </button>
-            <button type="button" class="btn btn-outline btn-sm btn-demo-charlie" onclick="fillDemoLogin('admin@commit.fun', 'Demo1234!')" title="Charlie: Protocol Admin">
-              ⚡ <strong>Charlie</strong><br><span class="demo-sublabel">Admin</span>
+            <button type="button" class="btn-demo-card" onclick="fillDemoLogin('admin@commit.fun', 'Demo1234!')" title="Charlie: Protocol Admin">
+              <span class="demo-card-icon">⚡</span>
+              <div class="demo-card-info">
+                <span class="demo-card-name">Charlie Miller</span>
+                <span class="demo-card-role">Admin</span>
+              </div>
             </button>
-            <button type="button" class="btn btn-outline btn-sm btn-demo-david" onclick="fillDemoLogin('david@commit.fun', 'Demo1234!')" title="David: Goal Achiever">
-              🎯 <strong>David</strong><br><span class="demo-sublabel">Achiever</span>
+            <button type="button" class="btn-demo-card" onclick="fillDemoLogin('david@commit.fun', 'Demo1234!')" title="David: Goal Achiever">
+              <span class="demo-card-icon">🎯</span>
+              <div class="demo-card-info">
+                <span class="demo-card-name">David Park</span>
+                <span class="demo-card-role">Achiever</span>
+              </div>
             </button>
           </div>
         </div>
@@ -584,7 +600,7 @@
         </form>
 
         <!-- SIGN UP FORM -->
-        <form id="formSignUp" class="hidden" onsubmit="handleSignUp(event)">
+        <form id="formSignUp" onsubmit="handleSignUp(event)">
           <div class="auth-input-group">
             <label class="auth-label">Email Address</label>
             <input type="email" class="auth-input" id="signupEmail" required placeholder="you@example.com" />
@@ -611,7 +627,7 @@
         </form>
 
         <!-- FORGOT PASSWORD FORM -->
-        <form id="formForgot" class="hidden" onsubmit="handleForgotPassword(event)">
+        <form id="formForgot" onsubmit="handleForgotPassword(event)">
           <div class="auth-input-group">
             <label class="auth-label">Account Email Address</label>
             <input type="email" class="auth-input" id="forgotEmail" required placeholder="you@example.com" />

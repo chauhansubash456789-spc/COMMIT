@@ -1996,3 +1996,128 @@ main.container {
 .btn-submit-large {
   padding: 1rem;
 }
+
+
+/* ==========================================================================
+   AUTH MODAL 2x2 GRID & TAB SWITCHING REFINEMENTS
+   ========================================================================== */
+
+#formSignUp,
+#formForgot {
+  display: none;
+}
+
+#formSignIn {
+  display: block;
+}
+
+.auth-modal-card {
+  max-width: 460px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.auth-body {
+  padding: 1.5rem 1.75rem;
+  overflow-y: auto;
+  max-height: calc(90vh - 120px);
+}
+
+.demo-accounts-box {
+  margin-bottom: 1.25rem;
+  padding: 0.85rem 1rem;
+  background: rgba(0, 240, 255, 0.05);
+  border: 1px dashed rgba(0, 240, 255, 0.3);
+  border-radius: var(--radius-md);
+  transition: all 0.2s ease;
+}
+
+[data-theme="light"] .demo-accounts-box {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.demo-box-header {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.65rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.demo-grid-2x2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.btn-demo-card {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 0.75rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+  font-family: var(--font-family);
+  width: 100%;
+}
+
+.btn-demo-card:hover {
+  transform: translateY(-1px);
+  border-color: var(--sol-purple);
+  box-shadow: 0 4px 12px rgba(153, 69, 255, 0.15);
+  background: rgba(153, 69, 255, 0.08);
+}
+
+[data-theme="light"] .btn-demo-card {
+  background: #ffffff;
+  border-color: #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+[data-theme="light"] .btn-demo-card:hover {
+  background: #f1f5f9;
+  border-color: var(--sol-purple);
+  box-shadow: 0 4px 10px rgba(153, 69, 255, 0.12);
+}
+
+.demo-card-icon {
+  font-size: 1.15rem;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.demo-card-info {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  line-height: 1.25;
+}
+
+.demo-card-name {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+[data-theme="light"] .demo-card-name {
+  color: #0f172a;
+}
+
+.demo-card-role {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}

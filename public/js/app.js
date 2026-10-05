@@ -960,26 +960,30 @@ function switchAuthTab(tab) {
   const formIn = document.getElementById('formSignIn');
   const formUp = document.getElementById('formSignUp');
   const formFg = document.getElementById('formForgot');
+  const demoBox = document.getElementById('authDemoAccountsBox') || document.querySelector('.demo-accounts-box');
 
   if (!btnIn || !btnUp || !btnFg) return;
   btnIn.classList.remove('active');
   btnUp.classList.remove('active');
   btnFg.classList.remove('active');
 
-  formIn.style.display = 'none';
-  formUp.style.display = 'none';
-  formFg.style.display = 'none';
+  if (formIn) formIn.style.display = 'none';
+  if (formUp) formUp.style.display = 'none';
+  if (formFg) formFg.style.display = 'none';
   clearAuthAlert();
 
   if (tab === 'signup') {
     btnUp.classList.add('active');
-    formUp.style.display = 'block';
+    if (formUp) formUp.style.display = 'block';
+    if (demoBox) demoBox.style.display = 'none'; // Only show demo logins on Sign In tab
   } else if (tab === 'forgot') {
     btnFg.classList.add('active');
-    formFg.style.display = 'block';
+    if (formFg) formFg.style.display = 'block';
+    if (demoBox) demoBox.style.display = 'none';
   } else {
     btnIn.classList.add('active');
-    formIn.style.display = 'block';
+    if (formIn) formIn.style.display = 'block';
+    if (demoBox) demoBox.style.display = 'block';
   }
 }
 
