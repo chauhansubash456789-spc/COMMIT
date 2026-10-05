@@ -1276,6 +1276,9 @@ async function loadAdminAuditLogs() {
 // Hook into DOMContentLoaded
 document.addEventListener('DOMContentLoaded', () => {
   initAuth();
+  if (new URLSearchParams(window.location.search).has('auth')) {
+    setTimeout(() => { if (typeof openAuthModal === 'function') openAuthModal('signin'); }, 150);
+  }
 });
 
 // -------------------------------------------------------------
