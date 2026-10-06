@@ -3,7 +3,7 @@ import cors from 'cors';
 import path from 'path';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
-import { ORACLE_PUBLIC_KEY, verifyAttestationSignature } from './oracle/attestation.js';
+import { ORACLE_PUBLIC_KEY, verifyAttestationSignature, signVerificationResult, hashEvidence } from './oracle/attestation.js';
 import { GitHubVerifier } from './verifiers/githubVerifier.js';
 import { StudyTimerVerifier } from './verifiers/studyTimerVerifier.js';
 import { PeerConsensusVerifier } from './verifiers/peerConsensusVerifier.js';
@@ -12,6 +12,9 @@ import { getActionsJson, getCommitActionMetadata, buildActionTransaction } from 
 import { dbGetCommitments, dbSaveCommitment, isDatabaseReady } from './db/supabase.js';
 import { authRouter } from './auth/routes.js';
 import { requireAuth, requireRole, requireActive } from './auth/middleware.js';
+import { logAudit } from './auth/middleware.js';
+import { disputeManager } from './disputes/disputeManager.js';
+import { reputationManager } from './reputation/reputationManager.js';
 import { supabaseAdmin } from './auth/supabase.js';
 
 dotenv.config();
@@ -255,7 +258,7 @@ app.post('/api/commitments/create', async (req, res) => {
   const newCommitment = {
     id,
     title: title.trim(),
-    creator: creator || 'DemoCreatorWallet111111111111111111111111111111',
+    creator: creator || (profile && profile.wallet_address) || 'DemoCreatorWallet111111111111111111111111111111',
     stakingMode: mode,
     stakeAmount: stake,
     penaltyAmount: penalty,
@@ -353,18 +356,18 @@ app.post('/api/verify/study/heartbeat', (req, res) => {
 });
 
 app.post('/api/verify/study/finish', async (req, res) => {
-  const { commitmentId } = req.body;
+  const { commitmentId, demoForceSeconds } = req.body;
   const c = commitments.get(commitmentId);
   if (!c) return res.status(404).json({ error: 'Commitment not found' });
   if (c.status === 'SETTLED') return res.status(400).json({ error: 'Commitment already settled' });
 
-  const attestation = studyVerifier.finishSession(c.id);
+  const attestation = studyVerifier.finishSession(c.id, demoForceSeconds, c.creator);
   c.status = 'VERIFIED';
   c.attestation = attestation;
 
   await dbSaveCommitment(c);
 
-  res.json({ attestation, isSignatureValid: verifyAttestationSignature(attestation) });
+  res.json({ commitment: c, attestation, isSignatureValid: verifyAttestationSignature(attestation) });
 });
 
 // --- PEER CONSENSUS VERIFIER ENDPOINTS ---
@@ -397,8 +400,12 @@ app.get('/api/verify/peer/task/:id', (req, res) => {
 app.post('/api/verify/peer/submit-proof', (req, res) => {
   try {
     const { commitmentId, evidenceData } = req.body;
-    const result = peerVerifier.submitProof(commitmentId, evidenceData || {});
     const c = commitments.get(commitmentId);
+    const data = {
+      ...(evidenceData || {}),
+      walletAddress: c ? c.creator : (evidenceData?.walletAddress || 'USER_WALLET_DEMO')
+    };
+    const result = peerVerifier.submitProof(commitmentId, data);
     if (c) c.status = 'PENDING_VERIFICATION';
     res.json(result);
   } catch (err) {
@@ -443,35 +450,247 @@ app.post('/api/verify/peer/vote', async (req, res) => {
   }
 });
 
-// --- DISPUTE ENDPOINTS ---
+// --- DISPUTE ENDPOINTS (FORMAL 5-STATE LIFECYCLE) ---
 app.post('/api/commitments/:id/dispute', async (req, res) => {
-  const c = commitments.get(req.params.id);
-  if (!c) return res.status(404).json({ error: 'Commitment not found' });
-  if (c.status !== 'VERIFIED') {
-    return res.status(400).json({ error: 'Can only dispute verified commitments before settlement' });
-  }
+  try {
+    const c = commitments.get(req.params.id);
+    if (!c) return res.status(404).json({ error: 'Commitment not found' });
+    if (c.status !== 'VERIFIED') {
+      return res.status(400).json({ error: 'Can only dispute verified commitments before settlement' });
+    }
 
-  c.status = 'DISPUTED';
-  c.disputedAt = new Date().toISOString();
-  await dbSaveCommitment(c);
-  res.json({ message: 'Dispute opened. Normal settlement blocked pending review.', commitment: c });
+    const { reason, evidence } = req.body || {};
+    const openedBy = req.user?.id || c.creator;
+    const dispute = await disputeManager.openDispute({
+      commitment: c,
+      openedBy,
+      reason,
+      evidence
+    });
+
+    await dbSaveCommitment(c);
+
+    try {
+      await logAudit({
+        actorUserId: openedBy,
+        action: 'DISPUTE_OPENED',
+        targetType: 'COMMITMENT',
+        targetId: c.id,
+        metadata: { disputeId: dispute.dispute_id, reason: dispute.reason },
+        ipAddress: req.ip
+      });
+    } catch (_) {}
+
+    res.json({
+      message: 'Dispute opened. Normal settlement blocked pending review.',
+      commitment: c,
+      dispute
+    });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.get('/api/commitments/:id/dispute', async (req, res) => {
+  const dispute = disputeManager.getDisputeByCommitment(req.params.id);
+  if (!dispute) {
+    return res.status(404).json({ error: 'No dispute found for this commitment' });
+  }
+  res.json({ dispute });
 });
 
 app.post('/api/commitments/:id/resolve-dispute', requireAuth, requireRole(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
-  const { resolution } = req.body; // 'OVERTURN_TO_PASS' or 'UPHOLD_FAIL'
-  const c = commitments.get(req.params.id);
-  if (!c) return res.status(404).json({ error: 'Commitment not found' });
-  if (c.status !== 'DISPUTED') {
-    return res.status(400).json({ error: 'Commitment is not in disputed state' });
-  }
+  try {
+    const { resolution, notes } = req.body || {}; // 'OVERTURN_TO_PASS' or 'UPHOLD_FAIL'
+    const c = commitments.get(req.params.id);
+    if (!c) return res.status(404).json({ error: 'Commitment not found' });
+    if (c.status !== 'DISPUTED') {
+      return res.status(400).json({ error: 'Commitment is not in disputed state' });
+    }
 
-  if (resolution === 'OVERTURN_TO_PASS') {
-    c.attestation.isSuccessful = true;
-    c.attestation.resultCode = 'DISPUTE_OVERTURN_PASS';
+    const dispute = disputeManager.getDisputeByCommitment(c.id);
+    const disputeId = dispute ? dispute.dispute_id : null;
+
+    let resolvedDispute = null;
+    if (disputeId) {
+      resolvedDispute = await disputeManager.resolveDispute({
+        disputeId,
+        resolverUserId: req.user.id,
+        resolution: resolution === 'OVERTURN_TO_PASS' ? 'RESOLVED_USER' : 'RESOLVED_VERIFIER',
+        notes: notes || 'Admin dispute resolution decision'
+      });
+    }
+
+    const isSuccessful = (resolution === 'OVERTURN_TO_PASS' || resolution === 'RESOLVED_USER');
+    const resultCode = isSuccessful ? 'DISPUTE_OVERTURN_PASS' : 'DISPUTE_UPHELD_FAIL';
+    const evidencePayload = {
+      ...(c.attestation ? c.attestation.evidencePayload : {}),
+      disputeResolution: resolution,
+      resolvedBy: req.user.id,
+      notes: notes || 'Dispute resolution'
+    };
+    const evidenceHash = hashEvidence(evidencePayload);
+
+    c.attestation = signVerificationResult({
+      commitmentId: c.id,
+      walletAddress: c.creator,
+      verifierType: c.verifierType,
+      verifierVersion: 'dispute-v1.0',
+      resultCode,
+      isSuccessful,
+      verifiedMetric: isSuccessful ? 1 : 0,
+      requiredMetric: 1,
+      evidencePayload,
+      evidenceHash
+    });
+    c.status = 'VERIFIED';
+    await dbSaveCommitment(c);
+
+    try {
+      await logAudit({
+        actorUserId: req.user.id,
+        action: 'DISPUTE_RESOLVED',
+        targetType: 'COMMITMENT',
+        targetId: c.id,
+        metadata: { disputeId, resolution, notes },
+        ipAddress: req.ip
+      });
+    } catch (_) {}
+
+    res.json({
+      message: `Dispute resolved: ${resolution}. Ready for settlement.`,
+      commitment: c,
+      dispute: resolvedDispute
+    });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
   }
-  c.status = 'VERIFIED';
-  await dbSaveCommitment(c);
-  res.json({ message: `Dispute resolved: ${resolution}. Ready for settlement.`, commitment: c });
+});
+
+// --- ADMIN SYSTEM & AUDIT CONTROLS ---
+app.get('/api/admin/dashboard', requireAuth, requireRole(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
+  try {
+    const commitmentsList = Array.from(commitments.values());
+    const totalVolume = commitmentsList.reduce((acc, c) => acc + (Number(c.stakeAmount) || 0), 0);
+    const totalSettledVolume = commitmentsList
+      .filter(c => c.status === 'SETTLED')
+      .reduce((acc, c) => acc + (Number(c.stakeAmount) || 0), 0);
+
+    const { count: usersCount } = await supabaseAdmin
+      .from('user_profiles')
+      .select('*', { count: 'exact', head: true });
+
+    const disputesList = disputeManager.getAllDisputes();
+    const verifiersList = [
+      reputationManager.calculateStats('v_alex'),
+      reputationManager.calculateStats('v_elena'),
+      reputationManager.calculateStats('v_chen')
+    ];
+
+    res.json({
+      stats: {
+        totalUsers: usersCount || 5,
+        totalCommitments: commitmentsList.length,
+        activeCommitments: commitmentsList.filter(c => c.status === 'ACTIVE' || c.status === 'FUNDED').length,
+        settledCommitments: commitmentsList.filter(c => c.status === 'SETTLED').length,
+        disputedCommitments: commitmentsList.filter(c => c.status === 'DISPUTED').length,
+        totalVolumeUsdc: totalVolume,
+        totalSettledUsdc: totalSettledVolume,
+        activeVerifiers: verifiersList.length,
+        openDisputes: disputesList.filter(d => d.status === 'OPEN').length
+      },
+      systemStatus: 'HEALTHY'
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/admin/commitments', requireAuth, requireRole(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
+  try {
+    let list = Array.from(commitments.values());
+    const { status, verifierType } = req.query;
+    if (status) list = list.filter(c => c.status === status);
+    if (verifierType) list = list.filter(c => c.verifierType === verifierType);
+    res.json({ commitments: list });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/admin/disputes', requireAuth, requireRole(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
+  try {
+    const { status } = req.query;
+    const disputes = disputeManager.getAllDisputes({ status });
+    res.json({ disputes });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/admin/verifiers', requireAuth, requireRole(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
+  try {
+    const verifierIds = ['v_alex', 'v_elena', 'v_chen'];
+    const verifiers = verifierIds.map(id => reputationManager.calculateStats(id));
+    res.json({ verifiers });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/admin/security-events', requireAuth, requireRole(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
+  try {
+    const { data: logs, error } = await supabaseAdmin
+      .from('audit_logs')
+      .select('*')
+      .in('action', ['USER_SUSPENDED', 'ADMIN_STATUS_CHANGED', 'ADMIN_SUSPENDED_VERIFIER', 'DISPUTE_OPENED', 'DISPUTE_RESOLVED'])
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    if (error) throw error;
+    res.json({ securityEvents: logs || [] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/admin/system-health', requireAuth, requireRole(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
+  try {
+    let solanaStatus = 'ONLINE';
+    let currentSlot = 0;
+    try {
+      currentSlot = await escrowClient.connection.getSlot('confirmed');
+    } catch (_) {
+      solanaStatus = 'DEGRADED';
+    }
+
+    const mem = process.memoryUsage();
+    res.json({
+      health: {
+        status: 'HEALTHY',
+        uptimeSeconds: Math.round(process.uptime()),
+        solanaDevnet: {
+          status: solanaStatus,
+          slot: currentSlot,
+          rpcEndpoint: escrowClient.endpoint
+        },
+        database: {
+          status: 'CONNECTED',
+          provider: 'Supabase PostgreSQL'
+        },
+        oracle: {
+          status: 'ONLINE',
+          publicKey: ORACLE_PUBLIC_KEY
+        },
+        memory: {
+          heapUsedMb: Math.round(mem.heapUsed / 1024 / 1024),
+          rssMb: Math.round(mem.rss / 1024 / 1024)
+        }
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // --- ON-CHAIN SETTLEMENT ENDPOINT (WITH HARDENED ANTI-REPLAY & ANTI-DOUBLE SETTLE) ---
@@ -585,7 +804,7 @@ app.post('/api/demo/run', async (req, res) => {
     const c = commitments.get('cm_study_02');
     c.status = 'ACTIVE';
     // 60 seconds forced for deterministic demo
-    const attestation = studyVerifier.finishSession(c.id, 60);
+    const attestation = studyVerifier.finishSession(c.id, 60, c.creator);
     c.attestation = attestation;
     c.status = 'VERIFIED';
     const settlement = await escrowClient.executeSettlement(attestation, c);

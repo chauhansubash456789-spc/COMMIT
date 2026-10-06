@@ -258,6 +258,60 @@ pub mod commit_protocol {
         });
         Ok(())
     }
+
+    /// Explicitly activate commitment once start time is reached
+    pub fn activate_commitment(ctx: Context<ActivateCommitment>) -> Result<()> {
+        let commitment = &mut ctx.accounts.commitment;
+        require!(
+            commitment.status == CommitmentStatus::Funded as u8,
+            CommitError::InvalidStateTransition
+        );
+        let clock = Clock::get()?;
+        require!(clock.unix_timestamp >= commitment.start_time, CommitError::InvalidTimeframe);
+        commitment.status = CommitmentStatus::Active as u8;
+
+        emit!(CommitmentActivatedEvent {
+            commitment_id: commitment.commitment_id,
+            activated_at: clock.unix_timestamp,
+        });
+
+        Ok(())
+    }
+
+    /// Resolve an open dispute by authorized dispute resolver / admin
+    pub fn resolve_dispute(
+        ctx: Context<ResolveDispute>,
+        resolution: u8, // 1 = RESOLVED_USER (Overturn to PASS), 2 = RESOLVED_VERIFIER (Uphold FAIL)
+    ) -> Result<()> {
+        let commitment = &mut ctx.accounts.commitment;
+        require!(
+            commitment.status == CommitmentStatus::Disputed as u8,
+            CommitError::InvalidStateTransition
+        );
+        require_keys_eq!(
+            ctx.accounts.dispute_resolver.key(),
+            commitment.oracle_authority,
+            CommitError::Unauthorized
+        );
+
+        if resolution == 1 {
+            // Overturn to PASS
+            commitment.is_successful = true;
+            commitment.status = CommitmentStatus::Verified as u8;
+        } else {
+            // Uphold FAIL
+            commitment.is_successful = false;
+            commitment.status = CommitmentStatus::Verified as u8;
+        }
+
+        emit!(DisputeResolvedEvent {
+            commitment_id: commitment.commitment_id,
+            resolution,
+            is_successful: commitment.is_successful,
+        });
+
+        Ok(())
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -383,6 +437,28 @@ pub struct OpenDispute<'info> {
     pub creator: Signer<'info>,
 }
 
+#[derive(Accounts)]
+pub struct ActivateCommitment<'info> {
+    #[account(
+        mut,
+        seeds = [b"commitment", commitment.commitment_id.as_ref()],
+        bump = commitment.bump
+    )]
+    pub commitment: Account<'info, CommitmentAccount>,
+    pub authority: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct ResolveDispute<'info> {
+    #[account(
+        mut,
+        seeds = [b"commitment", commitment.commitment_id.as_ref()],
+        bump = commitment.bump
+    )]
+    pub commitment: Account<'info, CommitmentAccount>,
+    pub dispute_resolver: Signer<'info>,
+}
+
 // -----------------------------------------------------------------------------
 // STATE & ENUMS
 // -----------------------------------------------------------------------------
@@ -486,6 +562,19 @@ pub struct CommitmentSettledEvent {
 pub struct DisputeOpenedEvent {
     pub commitment_id: [u8; 32],
     pub disputer: Pubkey,
+}
+
+#[event]
+pub struct CommitmentActivatedEvent {
+    pub commitment_id: [u8; 32],
+    pub activated_at: i64,
+}
+
+#[event]
+pub struct DisputeResolvedEvent {
+    pub commitment_id: [u8; 32],
+    pub resolution: u8,
+    pub is_successful: bool,
 }
 
 // -----------------------------------------------------------------------------

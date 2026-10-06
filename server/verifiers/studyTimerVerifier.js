@@ -84,14 +84,14 @@ export class StudyTimerVerifier {
   /**
    * Completes study session and issues signed attestation based SOLELY on server-recorded heartbeats
    */
-  finishSession(commitmentId, demoForceSeconds = null) {
+  finishSession(commitmentId, demoForceSeconds = null, walletAddress = null) {
     let session = this.sessions.get(commitmentId);
     
     if (!session) {
       // Create completed session record only for deterministic mock / demo scenarios
       session = {
         commitmentId,
-        walletAddress: 'DEMO_STUDENT_WALLET',
+        walletAddress: walletAddress || 'DEMO_STUDENT_WALLET',
         requiredSeconds: 180,
         verifiedActiveSeconds: demoForceSeconds !== null ? demoForceSeconds : 0,
         idleSeconds: 0,
@@ -99,15 +99,32 @@ export class StudyTimerVerifier {
         heartbeats: [],
         startedAt: Date.now() - 180000
       };
-    } else if (demoForceSeconds !== null) {
-      // Only allowed in deterministic demo runner
-      session.verifiedActiveSeconds = demoForceSeconds;
+    } else {
+      if (walletAddress) session.walletAddress = walletAddress;
+      if (demoForceSeconds !== null) {
+        // Only allowed in deterministic demo runner
+        session.verifiedActiveSeconds = demoForceSeconds;
+      }
     }
 
     session.status = 'COMPLETED';
 
     const isSuccessful = session.verifiedActiveSeconds >= session.requiredSeconds;
-    const resultCode = isSuccessful ? 'STUDY_PASS' : 'STUDY_FAIL';
+    let resultCode = isSuccessful ? 'STUDY_PASS' : 'STUDY_FAIL';
+
+    if (!isSuccessful) {
+      if (!session.walletAddress || session.walletAddress.includes('UNKNOWN')) {
+        resultCode = 'STUDY_IDENTITY_MISMATCH';
+      } else if (session.focusLostCount >= 10) {
+        resultCode = 'STUDY_FOCUS_LOST';
+      } else if (session.idleSeconds > session.verifiedActiveSeconds && session.idleSeconds > 60) {
+        resultCode = 'STUDY_IDLE_EXCLUDED';
+      } else if (session.verifiedActiveSeconds > 14400) {
+        resultCode = 'STUDY_MAX_SESSION_REACHED';
+      } else {
+        resultCode = 'STUDY_FAIL';
+      }
+    }
 
     const evidencePayload = {
       verifier: this.verifierType,

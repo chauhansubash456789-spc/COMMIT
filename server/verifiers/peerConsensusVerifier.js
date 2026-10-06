@@ -56,6 +56,7 @@ export class PeerConsensusVerifier {
     if (!task) throw new Error('No verification challenge found for commitment');
 
     task.evidence = {
+      walletAddress: evidenceData.walletAddress || 'USER_WALLET_DEMO',
       mediaUrl: evidenceData.mediaUrl || 'https://commit.protocol/proofs/demo_storage_clean.jpg',
       description: evidenceData.description || 'Completed physical task with blockhash displayed',
       checklist: evidenceData.checklist || [
