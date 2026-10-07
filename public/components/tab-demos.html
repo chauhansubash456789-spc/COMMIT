@@ -1,0 +1,53 @@
+<section id="tab-demos" class="tab-pane">
+      <div class="tab-header-box">
+        <h2 class="tab-main-title">Colosseum Hackathon 1-Click Demos</h2>
+        <p class="tab-subtitle">
+          Run deterministic, verifiable end-to-end demonstrations of the entire protocol.
+          Each scenario executes real Ed25519 cryptographic signing, SHA-256 evidence hashing, and Solana Devnet settlement.
+        </p>
+      </div>
+
+      <div class="grid-cards">
+        <!-- Demo 1 -->
+        <div class="commit-card">
+          <div>
+            <span class="mode-badge hardcore">Scenario 1</span>
+            <h3 class="card-title card-title-spaced">Automated GitHub PASS</h3>
+            <p class="demo-card-desc">
+              • 5 required commits, 7 qualifying commits verified.<br>
+              • Result: <strong>GH_PASS</strong><br>
+              • Outcome: 20 USDC returned to creator wallet on Solana Devnet.
+            </p>
+          </div>
+          <button class="btn btn-primary btn-full" onclick="runDemo('GH_PASS')">▶️ Run Demo 1 (GitHub PASS)</button>
+        </div>
+
+        <!-- Demo 2 -->
+        <div class="commit-card">
+          <div>
+            <span class="mode-badge noloss">Scenario 2</span>
+            <h3 class="card-title card-title-spaced">Deep Work Focus FAIL (No-Loss)</h3>
+            <p class="demo-card-desc">
+              • 3 focus hours required, only 1 hour verified.<br>
+              • Result: <strong>STUDY_FAIL</strong><br>
+              • Outcome: Principal 100% safe! Accrued yield forfeited to reward pool.
+            </p>
+          </div>
+          <button class="btn btn-purple btn-full" onclick="runDemo('STUDY_FAIL')">▶️ Run Demo 2 (Study FAIL)</button>
+        </div>
+
+        <!-- Demo 3 -->
+        <div class="commit-card">
+          <div>
+            <span class="mode-badge hardcore">Scenario 3</span>
+            <h3 class="card-title card-title-spaced">Remote Peer Consensus PASS</h3>
+            <p class="demo-card-desc">
+              • Solana Blockhash code verified.<br>
+              • 2-of-3 decentralized peer verifiers vote PASS.<br>
+              • Outcome: 30 USDC returned + 1.50 USDC fee paid to verifier Alex.
+            </p>
+          </div>
+          <button class="btn btn-primary btn-full" onclick="runDemo('PEER_PASS')">▶️ Run Demo 3 (Peer PASS)</button>
+        </div>
+      </div>
+    </section>

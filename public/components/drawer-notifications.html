@@ -1,0 +1,20 @@
+<div class="notifications-drawer-overlay" id="notificationsOverlay" onclick="toggleNotificationsDrawer()"></div>
+<aside class="notifications-drawer" id="notificationsDrawer">
+    <div class="notif-drawer-header">
+      <div class="notif-drawer-title">
+        <span>🔔 Notifications</span>
+        <span class="badge-pill badge-pill-dark" id="drawerUnreadCount">0 Unread</span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button class="btn btn-outline btn-sm" id="btnMarkAllNotifsRead" onclick="markAllNotificationsRead()" style="font-size:11px;padding:4px 8px;">Mark All Read</button>
+        <button class="close-btn" onclick="toggleNotificationsDrawer()">&times;</button>
+      </div>
+    </div>
+    <div class="notif-drawer-body" id="notificationsList">
+      <div class="empty-state-box" style="padding:24px 12px;">
+        <div class="empty-state-icon">📭</div>
+        <div class="empty-state-title">No Notifications</div>
+        <div class="empty-state-desc">You are all caught up on your commitments.</div>
+      </div>
+    </div>
+  </aside>

@@ -1,0 +1,111 @@
+<div class="auth-modal-overlay" id="authModalOverlay">
+    <div class="auth-modal-card">
+      <div class="auth-modal-header">
+        <div class="auth-modal-title">
+          <span class="modal-title-cyan">⚡</span> Commit Supabase Auth
+        </div>
+        <button class="close-btn modal-close-icon" onclick="closeAuthModal()">&times;</button>
+      </div>
+
+      <div class="auth-tabs-row">
+        <button class="auth-tab-item active" id="tabBtnSignIn" onclick="switchAuthTab('signin')">Sign In</button>
+        <button class="auth-tab-item" id="tabBtnSignUp" onclick="switchAuthTab('signup')">Sign Up</button>
+        <button class="auth-tab-item" id="tabBtnForgot" onclick="switchAuthTab('forgot')">Forgot Password</button>
+      </div>
+
+      <div class="auth-body">
+        <div id="authAlert" class="auth-alert-box"></div>
+
+        <!-- QUICK DEMO LOGINS -->
+        <div class="demo-accounts-box" id="authDemoAccountsBox">
+          <div class="demo-box-header">
+            <span class="demo-box-title">⚡ <strong>1-Click Demo Accounts</strong></span>
+            <span class="badge-pill badge-pill-ready">Ready</span>
+          </div>
+          <div class="demo-grid-2x2">
+            <button type="button" class="btn-demo-card" onclick="fillDemoLogin('alice@commit.fun', 'Demo1234!')" title="Alice: Goal Creator / Staker">
+              <span class="demo-card-icon">👤</span>
+              <div class="demo-card-info">
+                <span class="demo-card-name">Alice Vance</span>
+                <span class="demo-card-role">Creator</span>
+              </div>
+            </button>
+            <button type="button" class="btn-demo-card" onclick="fillDemoLogin('bob@commit.fun', 'Demo1234!')" title="Bob: Accredited Verifier">
+              <span class="demo-card-icon">🛡️</span>
+              <div class="demo-card-info">
+                <span class="demo-card-name">Bob Chen</span>
+                <span class="demo-card-role">Verifier</span>
+              </div>
+            </button>
+            <button type="button" class="btn-demo-card" onclick="fillDemoLogin('admin@commit.fun', 'Demo1234!')" title="Charlie: Protocol Admin">
+              <span class="demo-card-icon">⚡</span>
+              <div class="demo-card-info">
+                <span class="demo-card-name">Charlie Miller</span>
+                <span class="demo-card-role">Admin</span>
+              </div>
+            </button>
+            <button type="button" class="btn-demo-card" onclick="fillDemoLogin('david@commit.fun', 'Demo1234!')" title="David: Goal Achiever">
+              <span class="demo-card-icon">🎯</span>
+              <div class="demo-card-info">
+                <span class="demo-card-name">David Park</span>
+                <span class="demo-card-role">Achiever</span>
+              </div>
+            </button>
+          </div>
+        </div>
+
+        <!-- SIGN IN FORM -->
+        <form id="formSignIn" onsubmit="handleSignIn(event)">
+          <div class="auth-input-group">
+            <label class="auth-label">Email Address</label>
+            <input type="email" class="auth-input" id="loginEmail" required placeholder="you@example.com" />
+          </div>
+          <div class="auth-input-group">
+            <label class="auth-label">Password</label>
+            <input type="password" class="auth-input" id="loginPassword" required placeholder="••••••••" />
+          </div>
+          <button type="submit" class="btn btn-primary btn-auth-submit" id="btnLoginSubmit">
+            Sign In to Commit
+          </button>
+        </form>
+
+        <!-- SIGN UP FORM -->
+        <form id="formSignUp" onsubmit="handleSignUp(event)">
+          <div class="auth-input-group">
+            <label class="auth-label">Email Address</label>
+            <input type="email" class="auth-input" id="signupEmail" required placeholder="you@example.com" />
+          </div>
+          <div class="auth-input-group">
+            <label class="auth-label">Username (Unique)</label>
+            <input type="text" class="auth-input" id="signupUsername" required placeholder="solana_chad" />
+          </div>
+          <div class="auth-input-group">
+            <label class="auth-label">Display Name</label>
+            <input type="text" class="auth-input" id="signupDisplayName" required placeholder="Alice Auditor" />
+          </div>
+          <div class="auth-input-group">
+            <label class="auth-label">Password (Min 8 chars)</label>
+            <input type="password" class="auth-input" id="signupPassword" required placeholder="••••••••" />
+          </div>
+          <div class="auth-input-group">
+            <label class="auth-label">Confirm Password</label>
+            <input type="password" class="auth-input" id="signupConfirmPassword" required placeholder="••••••••" />
+          </div>
+          <button type="submit" class="btn btn-primary btn-auth-submit" id="btnSignupSubmit">
+            Create Commit Account
+          </button>
+        </form>
+
+        <!-- FORGOT PASSWORD FORM -->
+        <form id="formForgot" onsubmit="handleForgotPassword(event)">
+          <div class="auth-input-group">
+            <label class="auth-label">Account Email Address</label>
+            <input type="email" class="auth-input" id="forgotEmail" required placeholder="you@example.com" />
+          </div>
+          <button type="submit" class="btn btn-primary btn-auth-submit" id="btnForgotSubmit">
+            Send Secure Reset Link
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>

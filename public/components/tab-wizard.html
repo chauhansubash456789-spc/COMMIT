@@ -1,0 +1,330 @@
+<section id="tab-wizard" class="tab-pane">
+      <!-- LOCKED CARD WHEN NOT LOGGED IN -->
+      <div id="wizardAuthRequiredCard" class="wizard-card wizard-auth-card">
+        <div class="wizard-lock-icon">🔒</div>
+        <h3 class="wizard-auth-title">Authentication Required</h3>
+        <p class="wizard-auth-desc">
+          You must be logged in to create commitments and lock USDC behind your promises. Sign in or register to get started.
+        </p>
+        <button class="btn btn-primary btn-auth-lock-action" onclick="state.pendingTab='tab-wizard';openAuthModal('signin')">
+          🔑 Sign In / Register to Create
+        </button>
+      </div>
+
+      <!-- ACTIVE WIZARD FORM WHEN LOGGED IN -->
+      <div id="wizardFormCard" class="wizard-card hidden">
+        <!-- Multi-Step Header Nodes -->
+        <div class="wizard-steps" id="wizardStepsBar">
+          <div class="wizard-step-node active" data-step-node="1">
+            <div class="step-number">1</div>
+            <div class="step-label">Type</div>
+          </div>
+          <div class="wizard-step-node" data-step-node="2">
+            <div class="step-number">2</div>
+            <div class="step-label">Goal</div>
+          </div>
+          <div class="wizard-step-node" data-step-node="3">
+            <div class="step-number">3</div>
+            <div class="step-label">Criteria</div>
+          </div>
+          <div class="wizard-step-node" data-step-node="4">
+            <div class="step-number">4</div>
+            <div class="step-label">Oracle</div>
+          </div>
+          <div class="wizard-step-node" data-step-node="5">
+            <div class="step-number">5</div>
+            <div class="step-label">Policy</div>
+          </div>
+          <div class="wizard-step-node" data-step-node="6">
+            <div class="step-number">6</div>
+            <div class="step-label">Review</div>
+          </div>
+          <div class="wizard-step-node" data-step-node="7">
+            <div class="step-number">7</div>
+            <div class="step-label">Fund</div>
+          </div>
+        </div>
+
+        <form id="commitmentWizardForm">
+          <!-- STEP 1: SELECT COMMITMENT TYPE -->
+          <div class="step-content-pane active" id="wizardPane1">
+            <h3 class="section-title-sm" style="margin-bottom:6px;">Step 1 — Select Commitment Type</h3>
+            <p style="color:var(--text-secondary);font-size:13px;margin-bottom:16px;">
+              Choose the category of measurable accomplishment you wish to bind with financial capital.
+            </p>
+
+            <div class="staking-mode-selector" style="grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px;">
+              <div class="mode-option-card selected" data-type-card="github" onclick="selectCommitmentType('github')">
+                <div style="font-size:24px;margin-bottom:8px;">🐙</div>
+                <h4>GitHub Coding</h4>
+                <p>Verifies commit counts, unique git SHAs, author identity, and repository activity.</p>
+              </div>
+              <div class="mode-option-card" data-type-card="study_timer" onclick="selectCommitmentType('study_timer')">
+                <div style="font-size:24px;margin-bottom:8px;">⏱️</div>
+                <h4>Study Timer</h4>
+                <p>Verifies active study sessions through cryptographic heartbeats in the Commit studio.</p>
+              </div>
+              <div class="mode-option-card" data-type-card="peer_consensus" onclick="selectCommitmentType('peer_consensus')">
+                <div style="font-size:24px;margin-bottom:8px;">👥</div>
+                <h4>Physical Task</h4>
+                <p>Verifies real-world tasks via dynamic Solana blockhash challenge and peer review.</p>
+              </div>
+            </div>
+
+            <div class="wizard-nav-row" style="justify-content: flex-end;">
+              <button type="button" class="btn btn-primary" onclick="goToWizardStep(2)">Next: Define Goal →</button>
+            </div>
+          </div>
+
+          <!-- STEP 2: DEFINE GOAL -->
+          <div class="step-content-pane" id="wizardPane2">
+            <h3 class="section-title-sm" style="margin-bottom:6px;">Step 2 — Define Your Goal</h3>
+            <p style="color:var(--text-secondary);font-size:13px;margin-bottom:16px;">
+              Clearly state what you commit to accomplish. Be concise and unambiguous.
+            </p>
+
+            <div class="form-group">
+              <label class="form-label">Goal Statement</label>
+              <input type="text" id="wizardTitle" class="form-input" required placeholder="e.g. Ship 5 qualifying commits to Solana anchor repo">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Goal Category / Description</label>
+              <textarea id="wizardDescription" class="form-input" rows="2" placeholder="e.g. Daily smart contract engineering sprints during hackathon week..."></textarea>
+            </div>
+
+            <div class="wizard-nav-row">
+              <button type="button" class="btn btn-secondary" onclick="goToWizardStep(1)">← Back</button>
+              <button type="button" class="btn btn-primary" onclick="validateGoalAndProceed()">Next: Define Success Criteria →</button>
+            </div>
+          </div>
+
+          <!-- STEP 3: SUCCESS CRITERIA -->
+          <div class="step-content-pane" id="wizardPane3">
+            <h3 class="section-title-sm" style="margin-bottom:6px;">Step 3 — Immutable Success Criteria</h3>
+            <p style="color:var(--text-secondary);font-size:13px;margin-bottom:16px;">
+              Define the exact, tamper-proof criteria required to pass verification.
+            </p>
+
+            <!-- Dynamic criteria inputs -->
+            <div id="criteriaGithubBlock">
+              <div class="form-group form-grid-2col">
+                <div>
+                  <label class="form-label">Repository (owner/repo)</label>
+                  <input type="text" id="wizardRepo" class="form-input" value="solana-labs/solana">
+                </div>
+                <div>
+                  <label class="form-label">GitHub Username</label>
+                  <input type="text" id="wizardGhUser" class="form-input" value="solana-builder">
+                </div>
+              </div>
+              <div class="form-group form-grid-2col">
+                <div>
+                  <label class="form-label">Required Qualifying Commits</label>
+                  <input type="number" id="wizardRequiredCommits" class="form-input" min="1" value="5">
+                </div>
+                <div>
+                  <label class="form-label">Commitment Period (Days)</label>
+                  <input type="number" id="wizardPeriodDaysGh" class="form-input" min="1" max="90" value="7">
+                </div>
+              </div>
+            </div>
+
+            <div id="criteriaStudyBlock" class="hidden">
+              <div class="form-group form-grid-2col">
+                <div>
+                  <label class="form-label">Session Target (Minutes)</label>
+                  <input type="number" id="wizardStudyMins" class="form-input" min="15" value="60">
+                </div>
+                <div>
+                  <label class="form-label">Required Number of Days</label>
+                  <input type="number" id="wizardStudyDays" class="form-input" min="1" value="5">
+                </div>
+              </div>
+              <p style="font-size:12px;color:var(--text-tertiary);margin-top:-6px;margin-bottom:12px;">
+                * System verifies active sessions through the Commit focus studio. Tab blurs and idle periods are deducted.
+              </p>
+            </div>
+
+            <div id="criteriaPeerBlock" class="hidden">
+              <div class="form-group">
+                <label class="form-label">Physical Task Checklist & Evidence Requirement</label>
+                <textarea id="wizardChecklist" class="form-input" rows="2" placeholder="e.g. 1. Clean workspace completely. 2. Show dynamic Solana blockhash challenge code in video."></textarea>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Completion Deadline (Days)</label>
+                <input type="number" id="wizardPeriodDaysPeer" class="form-input" min="1" max="30" value="3">
+              </div>
+            </div>
+
+            <div class="wizard-nav-row">
+              <button type="button" class="btn btn-secondary" onclick="goToWizardStep(2)">← Back</button>
+              <button type="button" class="btn btn-primary" onclick="goToWizardStep(4)">Next: Verification Oracle →</button>
+            </div>
+          </div>
+
+          <!-- STEP 4: VERIFICATION METHOD -->
+          <div class="step-content-pane" id="wizardPane4">
+            <h3 class="section-title-sm" style="margin-bottom:6px;">Step 4 — Select Verification Oracle</h3>
+            <p style="color:var(--text-secondary);font-size:13px;margin-bottom:16px;">
+              Choose how your success criteria will be validated and attested on Solana.
+            </p>
+
+            <div class="form-group">
+              <label class="form-label">Verification Oracle Engine</label>
+              <select id="wizardVerifier" class="form-select">
+                <option value="github">Automated GitHub Verifier (Validates git SHAs, author & repo)</option>
+                <option value="study_timer">Deep Work Focus Verifier (Cryptographic heartbeats & nonces)</option>
+                <option value="peer_consensus">Remote Peer Consensus (Dynamic blockhash & 2/3 peer review)</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Oracle Verification Network Fee</label>
+              <input type="text" class="form-input input-dimmed" value="1.50 USDC" disabled>
+              <p style="font-size:11px;color:var(--text-tertiary);margin-top:4px;">
+                Compensates decentralized oracles and human peer reviewers upon attestation completion.
+              </p>
+            </div>
+
+            <div class="wizard-nav-row">
+              <button type="button" class="btn btn-secondary" onclick="goToWizardStep(3)">← Back</button>
+              <button type="button" class="btn btn-primary" onclick="goToWizardStep(5)">Next: Failure Policy →</button>
+            </div>
+          </div>
+
+          <!-- STEP 5: FAILURE POLICY & STAKING -->
+          <div class="step-content-pane" id="wizardPane5">
+            <h3 class="section-title-sm" style="margin-bottom:6px;">Step 5 — Select Failure Policy & Stake</h3>
+            <p style="color:var(--text-secondary);font-size:13px;margin-bottom:16px;">
+              Core Principle: <em>"You decide the consequence before you make the promise."</em>
+            </p>
+
+            <div class="form-group">
+              <label class="form-label">Choose Staking & Risk Mode</label>
+              <div class="staking-mode-selector">
+                <div class="mode-option-card selected" data-mode="HARDCORE">
+                  <h4>🔥 Hardcore Principal</h4>
+                  <p>Stake your USDC directly into Solana Escrow PDA. High consequence, maximum self-accountability.</p>
+                </div>
+                <div class="mode-option-card" data-mode="NOLOSS">
+                  <h4>🛡️ No-Loss Yield Vault</h4>
+                  <p>Principal is 100% protected in Kamino lending vault. Only accrued yield is forfeited on failure!</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-group form-grid-2col">
+              <div>
+                <label class="form-label">Stake Amount (USDC)</label>
+                <input type="number" id="wizardStake" class="form-input" min="5" value="25" required>
+              </div>
+              <div>
+                <label class="form-label">Failure Destination Policy</label>
+                <select id="wizardFailurePolicy" class="form-select">
+                  <option value="PARTIAL_RETURN">Partial Return (75% Back, 25% Penalty)</option>
+                  <option value="EDUCATION_POOL">Developer Education Pool (100% Penalty to Devs)</option>
+                  <option value="CHARITY">GiveDirectly Charity Pool</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="consequence-box wizard-preview-box" id="wizardConsequencePreview">
+              <!-- Dynamically rendered -->
+            </div>
+
+            <div class="wizard-nav-row">
+              <button type="button" class="btn btn-secondary" onclick="goToWizardStep(4)">← Back</button>
+              <button type="button" class="btn btn-primary" onclick="goToWizardStep(6)">Next: Review Commitment →</button>
+            </div>
+          </div>
+
+          <!-- STEP 6: REVIEW -->
+          <div class="step-content-pane" id="wizardPane6">
+            <h3 class="section-title-sm" style="margin-bottom:6px;">Step 6 — Review Commitment Terms</h3>
+            <p style="color:var(--text-secondary);font-size:13px;margin-bottom:16px;">
+              Verify that all settings and success conditions accurately reflect your promise.
+            </p>
+
+            <div class="detail-section-card" id="wizardReviewCard">
+              <!-- Populated by updateWizardReview() -->
+            </div>
+
+            <div class="wizard-nav-row">
+              <button type="button" class="btn btn-secondary" onclick="goToWizardStep(5)">← Back</button>
+              <button type="button" class="btn btn-primary" onclick="goToWizardStep(7)">Proceed to Pre-Funding Agreement →</button>
+            </div>
+          </div>
+
+          <!-- STEP 7: PRE-FUNDING CONFIRMATION SCREEN (SECTION 9) -->
+          <div class="step-content-pane" id="wizardPane7">
+            <div style="border:1px solid rgba(255,107,85,0.3);background:rgba(255,107,85,0.04);border-radius:var(--radius-inner);padding:20px;margin-bottom:20px;">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+                <span style="font-size:20px;">📜</span>
+                <h3 style="font-size:16px;font-weight:800;color:var(--text-primary);text-transform:uppercase;letter-spacing:0.04em;">YOUR COMMITMENT AGREEMENT</h3>
+              </div>
+
+              <div class="detail-grid-2col" style="gap:14px;margin-bottom:16px;">
+                <div class="detail-param-item">
+                  <span class="detail-param-label">Goal</span>
+                  <span class="detail-param-val" id="confirmGoalDisplay">—</span>
+                </div>
+                <div class="detail-param-item">
+                  <span class="detail-param-label">Stake Amount</span>
+                  <span class="detail-param-val" id="confirmStakeDisplay">—</span>
+                </div>
+                <div class="detail-param-item">
+                  <span class="detail-param-label">Verification Fee</span>
+                  <span class="detail-param-val">1.50 USDC</span>
+                </div>
+                <div class="detail-param-item">
+                  <span class="detail-param-label">Commitment Period</span>
+                  <span class="detail-param-val" id="confirmPeriodDisplay">—</span>
+                </div>
+                <div class="detail-param-item" style="grid-column: span 2;">
+                  <span class="detail-param-label">Success Condition</span>
+                  <span class="detail-param-val" id="confirmConditionDisplay" style="color:var(--sol-cyan);">—</span>
+                </div>
+                <div class="detail-param-item">
+                  <span class="detail-param-label">If Successful</span>
+                  <span class="detail-param-val" id="confirmSuccessDisplay" style="color:var(--sol-emerald);">—</span>
+                </div>
+                <div class="detail-param-item">
+                  <span class="detail-param-label">If Failed</span>
+                  <span class="detail-param-val" id="confirmFailedDisplay" style="color:var(--sol-rose);">—</span>
+                </div>
+                <div class="detail-param-item" style="grid-column: span 2;">
+                  <span class="detail-param-label">Assigned Verifier</span>
+                  <span class="detail-param-val" id="confirmVerifierDisplay">—</span>
+                </div>
+              </div>
+
+              <label class="confirm-checkbox-label">
+                <input type="checkbox" id="chkConfirmRules" required>
+                <span>
+                  <strong>I understand the commitment rules.</strong>
+                  You decide the consequence before you make the promise.
+                  Once locked in the Solana escrow contract, all rules, failure destinations, and deadlines become strictly immutable.
+                </span>
+              </label>
+            </div>
+
+            <div class="wizard-nav-row">
+              <button type="button" class="btn btn-secondary" id="btnEditTerms" onclick="goToWizardStep(6)">← Edit Terms</button>
+              <button type="submit" class="btn btn-primary btn-submit-large" id="btnConfirmAndFund">
+                🔒 Confirm &amp; Fund with Solana Escrow
+              </button>
+            </div>
+
+            <!-- Live Solana transaction tracker -->
+            <div class="tx-tracker" id="fundTxTracker" role="status" aria-live="polite">
+              <div class="tx-step" data-tx-step="wallet"><span class="tx-dot"></span>Waiting for wallet...</div>
+              <div class="tx-step" data-tx-step="submitted"><span class="tx-dot"></span>Transaction submitted...</div>
+              <div class="tx-step" data-tx-step="confirming"><span class="tx-dot"></span>Confirming on Solana...</div>
+              <div class="tx-step" data-tx-step="confirmed"><span class="tx-dot"></span>Confirmed</div>
+              <div id="fundTxResult"></div>
+            </div>
+          </div>
+        </form>
+      </div>
+    </section>

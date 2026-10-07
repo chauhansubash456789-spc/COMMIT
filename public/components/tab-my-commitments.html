@@ -1,0 +1,56 @@
+<section id="tab-my-commitments" class="tab-pane">
+      <div class="tab-header-box">
+        <div class="section-header-row">
+          <div>
+            <h2 class="tab-main-title">📋 My Commitments</h2>
+            <p class="tab-subtitle">
+              Complete ledger of your financial commitments. Filter by status, inspect detailed immutable rules, upload off-chain evidence, and manage settlements.
+            </p>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="document.querySelector('[data-tab=\'tab-wizard\']').click()">＋ New Commitment</button>
+        </div>
+      </div>
+
+      <!-- Filter Pills + Sort -->
+      <div class="list-toolbar-row">
+      <div class="filter-pills-row">
+        <button class="filter-pill active" data-filter="ALL" onclick="filterMyCommitments('ALL')">All</button>
+        <button class="filter-pill" data-filter="ACTIVE" onclick="filterMyCommitments('ACTIVE')">⚡ Active</button>
+        <button class="filter-pill" data-filter="PENDING_VERIFICATION" onclick="filterMyCommitments('PENDING_VERIFICATION')">⏳ Pending Verification</button>
+        <button class="filter-pill" data-filter="COMPLETED" onclick="filterMyCommitments('COMPLETED')">✅ Completed</button>
+        <button class="filter-pill" data-filter="FAILED" onclick="filterMyCommitments('FAILED')">❌ Failed</button>
+        <button class="filter-pill" data-filter="DISPUTED" onclick="filterMyCommitments('DISPUTED')">⚖️ Disputed</button>
+      </div>
+        <label for="myCommitmentsSort" class="sr-only" style="position:absolute;left:-9999px;">Sort commitments</label>
+        <select id="myCommitmentsSort" class="form-select sort-select" onchange="sortMyCommitments(this.value)">
+          <option value="newest">Newest first</option>
+          <option value="oldest">Oldest first</option>
+          <option value="deadline">Deadline soonest</option>
+          <option value="stake_desc">Highest stake</option>
+          <option value="stake_asc">Lowest stake</option>
+        </select>
+      </div>
+
+      <!-- Commitments Table Wrap -->
+      <div class="commitments-table-wrap">
+        <table class="commitments-table">
+          <thead>
+            <tr>
+              <th>ID & Goal</th>
+              <th>Type & Oracle</th>
+              <th>Stake Locked</th>
+              <th>Timeline Window</th>
+              <th>Status</th>
+              <th>Failure Policy</th>
+              <th>Settlement</th>
+              <th style="text-align:right;">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="myCommitmentsTableBody">
+            <tr>
+              <td colspan="8" class="table-empty-cell">Loading your personal commitments...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>

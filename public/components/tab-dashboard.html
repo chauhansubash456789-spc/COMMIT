@@ -1,0 +1,114 @@
+<section id="tab-dashboard" class="tab-pane active">
+      <!-- 6-CARD PERSONAL USER OVERVIEW -->
+      <div id="userOverviewContainer" class="user-overview-section" style="margin-bottom:24px;">
+        <div class="section-header-row" style="margin-bottom:12px;">
+          <div>
+            <h3 class="section-title-sm" style="display:flex;align-items:center;gap:8px;">
+              <span>⚡ Your Financial Commitments Overview</span>
+            </h3>
+            <p style="color:var(--text-secondary);font-size:12px;">
+              Real-time authoritative metrics from your Solana escrows & database records
+            </p>
+          </div>
+          <span class="badge-pill badge-pill-dark" id="overviewUserTag">Guest</span>
+        </div>
+
+        <div class="user-overview-grid" id="userOverviewCards">
+          <div class="user-overview-card card-active">
+            <div class="overview-card-header">
+              <span class="overview-card-label">Active Commitments</span>
+              <span class="overview-card-icon">⚡</span>
+            </div>
+            <div class="overview-card-value" id="cardActiveCount">0</div>
+            <div class="overview-card-sub">In progress</div>
+          </div>
+          <div class="user-overview-card card-pending">
+            <div class="overview-card-header">
+              <span class="overview-card-label">Pending Verification</span>
+              <span class="overview-card-icon">⏳</span>
+            </div>
+            <div class="overview-card-value" id="cardPendingCount">0</div>
+            <div class="overview-card-sub">Awaiting verification</div>
+          </div>
+          <div class="user-overview-card card-completed">
+            <div class="overview-card-header">
+              <span class="overview-card-label">Completed</span>
+              <span class="overview-card-icon">✅</span>
+            </div>
+            <div class="overview-card-value" id="cardCompletedCount">0</div>
+            <div class="overview-card-sub">Settled successfully</div>
+          </div>
+          <div class="user-overview-card card-failed">
+            <div class="overview-card-header">
+              <span class="overview-card-label">Failed</span>
+              <span class="overview-card-icon">❌</span>
+            </div>
+            <div class="overview-card-value" id="cardFailedCount">0</div>
+            <div class="overview-card-sub">Consequence applied</div>
+          </div>
+          <div class="user-overview-card card-staked">
+            <div class="overview-card-header">
+              <span class="overview-card-label">Total Staked</span>
+              <span class="overview-card-icon">💰</span>
+            </div>
+            <div class="overview-card-value" id="cardTotalStaked">0.00 USDC</div>
+            <div class="overview-card-sub">Currently committed</div>
+          </div>
+          <div class="user-overview-card card-streak">
+            <div class="overview-card-header">
+              <span class="overview-card-label">Current Streak</span>
+              <span class="overview-card-icon">🔥</span>
+            </div>
+            <div class="overview-card-value" id="cardCurrentStreak">0</div>
+            <div class="overview-card-sub">Consecutive successes</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="hero-banner">
+        <div class="hero-content">
+          <div class="hero-headline">
+            <h2>Put money behind your promise.</h2>
+            <p>
+              Commit turns measurable goals into enforceable economic contracts on Solana.
+              Lock USDC, submit verifiable cryptographic proof, and trigger trustless settlement.
+            </p>
+          </div>
+          <div class="hero-stats">
+            <div class="stat-box">
+              <div class="stat-top-row">
+                <span class="stat-label">Total Committed</span>
+                <span class="badge-pill badge-pill-emerald">+18.4%</span>
+              </div>
+              <div class="stat-value" id="statTotalCommitted">150 USDC</div>
+              <div class="stat-micro-desc">Locked in Solana Escrow PDAs</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-top-row">
+                <span class="stat-label">Active Contracts</span>
+                <span class="badge-pill badge-pill-dark">Live Escrow</span>
+              </div>
+              <div class="stat-value text-inverted" id="statActiveCount">3</div>
+              <div class="stat-micro-desc">Autonomous Oracle Verified</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-top-row">
+                <span class="stat-label">Protocol Success</span>
+                <span class="badge-pill badge-pill-emerald">+2.4% All-Time</span>
+              </div>
+              <div class="stat-value" id="statSuccessRate">94%</div>
+              <div class="stat-micro-desc">Settlement Accuracy</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-header-row">
+        <h3 class="section-title-sm">Active Commitments & Escrows</h3>
+        <button class="btn btn-primary btn-sm" onclick="document.querySelector('[data-tab=\'tab-wizard\']').click()">+ New Commitment</button>
+      </div>
+
+      <div class="grid-cards" id="commitmentsGrid">
+        <!-- Rendered dynamically by app.js -->
+      </div>
+    </section>

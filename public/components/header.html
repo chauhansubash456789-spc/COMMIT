@@ -1,0 +1,40 @@
+<header>
+    <div class="brand">
+      <div class="brand-logo-icon">⚡</div>
+      <div class="brand-text">
+        <h1>COMMIT</h1>
+        <span class="site-selector-pill">PROTOCOL // SOLANA ▾</span>
+      </div>
+    </div>
+
+    <div class="header-meta">
+      <!-- THEME TOGGLE BUTTON -->
+      <button class="theme-toggle-btn" id="btnThemeToggle" onclick="toggleTheme()" title="Toggle Light / Dark Theme">
+        <span id="themeToggleIcon">🌙</span>
+        <span id="themeToggleText">Dark</span>
+      </button>
+      <button class="utility-circle-btn notif-bell-btn" id="btnNotificationsBell" onclick="toggleNotificationsDrawer()" title="Live User Notifications">
+        <span id="notifBellIcon">🔔</span>
+        <span class="notif-badge-pill hidden" id="notifBadge">0</span>
+      </button>
+      <div class="network-pill">
+        <div class="network-dot"></div>
+        <span>Devnet</span>
+      </div>
+
+      <div class="wallet-badge" title="Click to Request Devnet Airdrop" onclick="requestAirdrop()">
+        <span class="wallet-balance" id="walletUsdc">250.00 USDC</span>
+        <span class="wallet-separator">|</span>
+        <span class="wallet-balance wallet-balance-purple" id="walletSol">4.82 SOL</span>
+        <span class="wallet-address" id="walletAddress">H4cK...3111</span>
+        <button class="btn btn-primary btn-sm btn-airdrop">+ Airdrop</button>
+      </div>
+
+      <!-- AUTH USER / LOGIN SECTION -->
+      <div id="authHeaderSection" class="auth-header-section">
+        <button class="btn btn-outline btn-sm btn-open-auth" id="btnOpenAuth" onclick="openAuthModal('signin')">
+          <span>🔑 Sign In</span>
+        </button>
+      </div>
+    </div>
+  </header>

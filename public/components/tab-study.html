@@ -1,0 +1,39 @@
+<section id="tab-study" class="tab-pane">
+      <div class="tab-header-box">
+        <h2 class="tab-main-title">Deep Work & Focus Terminal</h2>
+        <p class="tab-subtitle">
+          Cryptographically verified study sessions. The client and server exchange rotating Ed25519 nonces every heartbeat.
+          Idle time and tab blurs are recorded to prevent cheating.
+        </p>
+      </div>
+
+      <div class="focus-studio-wrap">
+        <div class="timer-display-box">
+          <div class="timer-circle">
+            <div class="timer-time" id="timerDisplay">03:00</div>
+            <div class="timer-status-badge" id="timerStatusBadge">READY TO FOCUS</div>
+          </div>
+
+          <div class="timer-btn-row">
+            <button class="btn btn-primary btn-full" id="startFocusBtn">▶️ Start Focus Session</button>
+            <button class="btn btn-purple btn-full" id="finishFocusBtn">🏁 Finish & Attest</button>
+          </div>
+        </div>
+
+        <div>
+          <h4 class="feed-title">Cryptographic Nonce & Heartbeat Feed</h4>
+          <div class="heartbeat-pulse-feed" id="heartbeatLog">
+            <div>[System] Focus terminal initialized. Awaiting session start...</div>
+          </div>
+
+          <div class="info-callout-card">
+            <h5 class="callout-title">Anti-Cheating Architecture</h5>
+            <p class="callout-body">
+              1. Nonce Rotation: Each heartbeat requires the previous server-generated nonce.<br>
+              2. Visibility API: Switching tabs marks session as idle.<br>
+              3. Ed25519 Attestation: Upon completion, the Oracle signs the verified duration.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>

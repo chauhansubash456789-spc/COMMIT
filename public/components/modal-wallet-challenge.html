@@ -1,0 +1,19 @@
+<div class="auth-modal-overlay" id="walletChallengeModal">
+    <div class="auth-modal-card">
+      <div class="auth-modal-header">
+        <div class="auth-modal-title">
+          <span class="modal-title-purple">🛡️</span> Phantom Cryptographic Binding
+        </div>
+        <button class="close-btn modal-close-icon" onclick="closeWalletModal()">&times;</button>
+      </div>
+      <div class="auth-body">
+        <p class="wallet-challenge-desc">
+          Sign a server nonce challenge with Phantom to prove cryptographic wallet ownership. No private key or seed phrase is ever requested.
+        </p>
+        <div id="walletChallengeAlert" class="auth-alert-box"></div>
+        <button class="btn btn-primary btn-w-full" id="btnSignWalletAction" onclick="executeWalletSignatureChallenge()">
+          ✍️ Sign Challenge with Phantom
+        </button>
+      </div>
+    </div>
+  </div>

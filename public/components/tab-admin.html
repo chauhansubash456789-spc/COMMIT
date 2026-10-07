@@ -1,0 +1,29 @@
+<section id="tab-admin" class="tab-pane">
+      <div class="glass-panel admin-panel-padded">
+        <div class="admin-header-row">
+          <div>
+            <h2 class="admin-title">🛡️ Administrative Audit Trail</h2>
+            <p class="admin-subtitle">Authoritative immutable logs recorded in Supabase PostgreSQL</p>
+          </div>
+          <button class="btn btn-outline btn-sm" onclick="loadAdminAuditLogs()">🔄 Refresh Logs</button>
+        </div>
+
+        <div class="admin-table-scroll">
+          <table class="admin-audit-table">
+            <thead>
+              <tr>
+                <th>Timestamp</th>
+                <th>Action</th>
+                <th>Target Type</th>
+                <th>Target ID</th>
+                <th>Actor User ID</th>
+                <th>Metadata</th>
+              </tr>
+            </thead>
+            <tbody id="adminAuditTableBody">
+              <tr><td colspan="6" class="table-empty-cell">Loading audit trail from Supabase...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>

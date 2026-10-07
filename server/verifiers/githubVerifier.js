@@ -97,7 +97,7 @@ export class GitHubVerifier {
 
     const verifiedMetric = qualifying.length;
     const isSuccessful = verifiedMetric >= requiredCommits;
-    
+
     let resultCode = 'GH_FAIL';
     let failureReason = null;
 

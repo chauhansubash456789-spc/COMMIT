@@ -21,3 +21,7 @@ npm-debug.log*
 Thumbs.db
 .system_generated/
 .tempmediaStorage/
+
+# Backups & Temporary Snapshots
+*.backup.*
+*.monolithic.*

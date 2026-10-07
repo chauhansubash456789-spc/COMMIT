@@ -1,0 +1,45 @@
+<section id="tab-github" class="tab-pane">
+      <div class="tab-header-box">
+        <h2 class="tab-main-title">Automated GitHub Commitment Verifier</h2>
+        <p class="tab-subtitle">
+          Connect your GitHub repository and author identity. The verifier filters merge commits, ensures unique SHAs,
+          and signs an Ed25519 attestation to trigger Solana settlement.
+        </p>
+      </div>
+
+      <div class="verifier-card-container">
+        <div class="form-grid-2col-spaced">
+          <div>
+            <label class="form-label">Repository</label>
+            <input type="text" class="form-input" value="solana-labs/solana" id="ghRepoInput">
+          </div>
+          <div>
+            <label class="form-label">GitHub Username</label>
+            <input type="text" class="form-input" value="solana-builder" id="ghUserInput">
+          </div>
+        </div>
+
+        <div class="form-grid-2col-spaced">
+          <div>
+            <label class="form-label">Required Qualifying Commits</label>
+            <input type="number" class="form-input" value="5" id="ghRequiredInput">
+          </div>
+          <div>
+            <label class="form-label">Timeframe Window</label>
+            <input type="text" class="form-input input-dimmed" value="Last 7 Days (Oct 1 - Oct 8)" disabled>
+          </div>
+        </div>
+
+        <div class="consequence-box consequence-box-spaced">
+          <strong>Commitment Target:</strong> 20 USDC Escrowed. 5 Commits Required.<br>
+          • Pass: 20 USDC released to your wallet.<br>
+          • Fail: 15 USDC returned, 5 USDC to Developer Education Pool.
+        </div>
+
+        <button class="btn btn-primary btn-full" onclick="verifyGitHubCommitment('cm_gh_01')">
+          ⚡ Run GitHub Verification & Sign Ed25519 Attestation
+        </button>
+
+        <div id="ghResultsFeed"></div>
+      </div>
+    </section>

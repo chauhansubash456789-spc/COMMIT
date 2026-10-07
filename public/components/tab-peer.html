@@ -1,0 +1,88 @@
+<section id="tab-peer" class="tab-pane">
+      <div class="tab-header-box">
+        <h2 class="tab-main-title">Decentralized Remote Peer Verifier Portal</h2>
+        <p class="tab-subtitle">
+          Verifying real-world physical tasks without dangerous in-person travel.
+          Users submit ephemeral proof stamped with today's live <strong>Solana Blockhash Challenge</strong>.
+          3 bonded peer verifiers review proof; 2-of-3 consensus triggers automatic payout.
+        </p>
+      </div>
+
+      <div class="peer-portal-layout">
+        <!-- Verifier Profile -->
+        <div class="peer-profile-panel">
+          <div class="peer-avatar-center">
+            <div class="peer-avatar-circle">👨‍💻</div>
+            <h3 class="peer-name">Alex M.</h3>
+            <div class="peer-rating">★★★★★ 4.9 (128 reviews)</div>
+            <span class="badge-pill badge-expert">Verified Expert</span>
+          </div>
+
+          <div class="peer-stats-list">
+            <div class="peer-stat-row">
+              <span class="text-muted">Accuracy:</span>
+              <span class="text-emerald-bold">96%</span>
+            </div>
+            <div class="peer-stat-row">
+              <span class="text-muted">Completed:</span>
+              <span class="text-bold">128 Tasks</span>
+            </div>
+            <div class="peer-stat-row">
+              <span class="text-muted">Dispute Rate:</span>
+              <span class="text-cyan-bold">1.8%</span>
+            </div>
+            <div class="peer-stat-row-last">
+              <span class="text-muted">Total Earned:</span>
+              <span class="text-emerald-bold">84.50 USDC</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Verification Review Queue -->
+        <div class="peer-profile-panel">
+          <div class="section-header-row">
+            <h3 class="peer-name">Active Verification Task: Electronics Lab Organization</h3>
+            <span class="mode-badge hardcore">Hardcore (30 USDC)</span>
+          </div>
+
+          <div class="challenge-code-panel">
+            <div class="peer-stat-row">
+              <span class="challenge-code-label">Dynamic Blockhash Challenge:</span>
+              <span class="challenge-code-val" id="peerChallengeCode">SOL-7Z8z9x</span>
+            </div>
+            <p class="challenge-code-desc">
+              User must display this challenge code in their photo/video proof to prevent pre-recorded evidence reuse.
+            </p>
+          </div>
+
+          <div class="task-checklist-panel">
+            <h5 class="task-checklist-title">Task Checklist & Requirements:</h5>
+            <div class="task-checklist-items">
+              <div>✅ Work surface cleaned & components categorized</div>
+              <div>✅ Dynamic Blockhash challenge code visible in frame</div>
+              <div>✅ Timestamp matches Solana Devnet slot window</div>
+            </div>
+          </div>
+
+          <div class="form-select-group">
+            <label class="form-label form-label-sm">Select Reviewing Verifier Key:</label>
+            <select id="peerVerifierSelect" class="form-select form-select-sm">
+              <option value="v_alex">Alex M. (Expert Verifier - 4.9★)</option>
+              <option value="v_elena">Elena R. (Verified Verifier - 4.8★)</option>
+              <option value="v_chen">Chen W. (Master Verifier - 5.0★)</option>
+            </select>
+          </div>
+
+          <div class="btn-row-gap">
+            <button class="btn btn-primary btn-full" onclick="castPeerVote('v_alex', 'PASS')">
+              ✅ Vote PASS (Earn 1.50 USDC Reward)
+            </button>
+            <button class="btn btn-secondary btn-full" onclick="castPeerVote('v_alex', 'FAIL')">
+              ❌ Vote FAIL (Reject Incomplete Proof)
+            </button>
+          </div>
+
+          <div id="peerVotesStatus"></div>
+        </div>
+      </div>
+    </section>

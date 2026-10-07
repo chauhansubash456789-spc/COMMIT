@@ -16,6 +16,10 @@ import { logAudit } from './auth/middleware.js';
 import { disputeManager } from './disputes/disputeManager.js';
 import { reputationManager } from './reputation/reputationManager.js';
 import { supabaseAdmin } from './auth/supabase.js';
+import { notificationManager } from './notifications/notificationManager.js';
+import { calculateUserStats } from './reputation/userStatsHelper.js';
+import { verifierRouter } from './verifiers/verifierRoutes.js';
+import { verifierManager } from './verifiers/verifierManager.js';
 
 dotenv.config();
 
@@ -29,17 +33,21 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../public')));
 
+// In-memory commitment store with Supabase sync
+const commitments = new Map();
+app.locals.commitments = commitments;
+
 // Mount Authentication & Admin Authorization Routes
 app.use('/api/auth', authRouter);
 app.use('/api', authRouter);
+
+// Mount Authoritative Verifier Subsystem Routes
+app.use('/api/verifier', verifierRouter);
 
 // Initialize verifier engines
 const githubVerifier = new GitHubVerifier();
 const studyVerifier = new StudyTimerVerifier();
 const peerVerifier = new PeerConsensusVerifier();
-
-// In-memory commitment store with Supabase sync
-const commitments = new Map();
 
 // Helper to pre-populate demo data
 async function seedInitialCommitments() {
@@ -134,6 +142,29 @@ async function seedInitialCommitments() {
       { label: 'Dynamic blockhash visible and validated', checked: true }
     ]
   });
+
+  // Also seed in authoritative verifierManager
+  await verifierManager.createRequest({
+    commitmentId: 'cm_peer_03',
+    userId: 'usr_seed_creator_03',
+    userWallet: 'HardwareHacker3333333333333333333333333333333',
+    verifierId: 'v_alex',
+    taskSummary: 'Organize and Clean Electronics Lab & Workbench',
+    stake: 30,
+    verifierFee: 2.0,
+    verificationType: 'human_physical',
+    locationRequirement: {
+      address: 'Hardware Lab Building 4, Room 204',
+      lat: 37.7749,
+      lng: -122.4194,
+      radiusMeters: 300
+    },
+    checklist: [
+      { id: 'chk_1', label: 'Work surface clean and cleared', required: true, checked: false },
+      { id: 'chk_2', label: 'Components sorted and organized into bins', required: true, checked: false },
+      { id: 'chk_3', label: 'Dynamic blockhash challenge code visible in evidence', required: true, checked: false }
+    ]
+  }).catch(() => {});
 }
 
 seedInitialCommitments();
@@ -147,16 +178,250 @@ app.get('/api/oracle/public-key', (req, res) => {
   res.json({ oraclePublicKey: ORACLE_PUBLIC_KEY, version: '1.0.0-devnet' });
 });
 
-// List all commitments
+// List all commitments (Public listing)
 app.get('/api/commitments', (req, res) => {
   res.json(Array.from(commitments.values()));
 });
 
-// Get single commitment
-app.get('/api/commitments/:id', (req, res) => {
+// List authenticated user's own commitments with statistics
+app.get('/api/commitments/my', requireAuth, requireActive, async (req, res) => {
+  try {
+    const userWallet = req.profile.wallet_address ? req.profile.wallet_address.toLowerCase() : null;
+    const myCommitments = Array.from(commitments.values()).filter(c => {
+      if (c.auth_user_id === req.user.id) return true;
+      if (c.details && c.details.auth_user_id === req.user.id) return true;
+      if (userWallet && c.creator && c.creator.toLowerCase() === userWallet) return true;
+      return false;
+    });
+
+    const stats = await calculateUserStats(req.user.id, req.profile.wallet_address, commitments);
+
+    res.json({
+      commitments: myCommitments,
+      stats
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// User overview statistics
+app.get('/api/user/overview', requireAuth, requireActive, async (req, res) => {
+  try {
+    const stats = await calculateUserStats(req.user.id, req.profile.wallet_address, commitments);
+    res.json({ stats });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// User notifications
+app.get('/api/notifications', requireAuth, (req, res) => {
+  try {
+    const notifications = notificationManager.getForUser(req.user.id);
+    const unreadCount = notificationManager.getUnreadCount(req.user.id);
+    res.json({ notifications, unreadCount });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/notifications/:id/read', requireAuth, (req, res) => {
+  try {
+    const ok = notificationManager.markAsRead(req.user.id, req.params.id);
+    res.json({ success: ok });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/notifications/read-all', requireAuth, (req, res) => {
+  try {
+    const count = notificationManager.markAllAsRead(req.user.id);
+    res.json({ success: true, count });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get single commitment (with privacy protection for sensitive evidence - IDOR defense)
+app.get('/api/commitments/:id', async (req, res) => {
   const c = commitments.get(req.params.id);
   if (!c) return res.status(404).json({ error: 'Commitment not found' });
-  res.json(c);
+
+  // Sensitive evidence privacy check
+  const authHeader = req.headers.authorization;
+  let requesterUserId = null;
+  let requesterRole = null;
+  let requesterWallet = null;
+
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    try {
+      const token = authHeader.split(' ')[1];
+      const { data: { user } } = await supabaseAdmin.auth.getUser(token);
+      if (user) {
+        requesterUserId = user.id;
+        const { data: prof } = await supabaseAdmin
+          .from('user_profiles')
+          .select('role, wallet_address')
+          .eq('auth_user_id', user.id)
+          .single();
+        requesterRole = prof?.role;
+        requesterWallet = prof?.wallet_address ? prof.wallet_address.toLowerCase() : null;
+      }
+    } catch (_) {}
+  }
+
+  const isOwner = requesterUserId && (
+    (c.auth_user_id === requesterUserId) ||
+    (c.details && c.details.auth_user_id === requesterUserId) ||
+    (requesterWallet && c.creator && c.creator.toLowerCase() === requesterWallet)
+  );
+  const isStaff = requesterRole === 'ADMIN' || requesterRole === 'SUPER_ADMIN' || requesterRole === 'VERIFIER';
+
+  const safe = JSON.parse(JSON.stringify(c));
+  if (!isOwner && !isStaff && safe.details) {
+    if (safe.details.evidence) {
+      if (safe.details.evidence.mediaUrl) {
+        safe.details.evidence.mediaUrl = '[Protected Private Evidence - Viewable by Creator & Verifiers Only]';
+      }
+      if (safe.details.evidence.location) {
+        safe.details.evidence.location = '[Protected Private Location]';
+      }
+      delete safe.details.evidence.content;
+    }
+    // Evidence history: expose only integrity metadata (type, hash, time) to third parties
+    if (Array.isArray(safe.details.evidenceHistory)) {
+      safe.details.evidenceHistory = safe.details.evidenceHistory.map(ev => ({
+        evidenceType: ev.evidenceType,
+        hash: ev.hash,
+        submittedAt: ev.submittedAt,
+        description: '[Protected Private Evidence]'
+      }));
+    }
+    delete safe.disputeReason;
+  }
+  safe.viewerIsOwner = Boolean(isOwner);
+
+  res.json(safe);
+});
+
+// Cancel un-funded commitment (CREATED state only)
+app.post('/api/commitments/:id/cancel', requireAuth, requireActive, async (req, res) => {
+  try {
+    const c = commitments.get(req.params.id);
+    if (!c) return res.status(404).json({ error: 'Commitment not found' });
+
+    const isOwner = (c.auth_user_id === req.user.id) ||
+      (c.details && c.details.auth_user_id === req.user.id) ||
+      (req.profile.wallet_address && c.creator && c.creator.toLowerCase() === req.profile.wallet_address.toLowerCase());
+    if (!isOwner) {
+      return res.status(403).json({ error: 'Forbidden: You can only cancel your own commitments' });
+    }
+
+    if (c.status !== 'CREATED') {
+      return res.status(400).json({ error: `Cannot cancel commitment in status '${c.status}'. Only un-funded CREATED commitments can be cancelled.` });
+    }
+
+    c.status = 'CANCELLED';
+    await dbSaveCommitment(c);
+
+    notificationManager.dispatch({
+      userId: req.user.id,
+      type: 'COMMITMENT_CANCELLED',
+      title: 'Commitment Cancelled',
+      message: `Commitment "${c.title}" was cancelled before funding.`,
+      commitmentId: c.id
+    });
+
+    await calculateUserStats(req.user.id, req.profile.wallet_address, commitments);
+    res.json({ message: 'Commitment cancelled successfully', commitment: c });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Submit evidence for commitment
+app.post('/api/commitments/:id/evidence', requireAuth, requireActive, async (req, res) => {
+  try {
+    const c = commitments.get(req.params.id);
+    if (!c) return res.status(404).json({ error: 'Commitment not found' });
+
+    // Enforce ownership: Only the creator can submit evidence for their commitment
+    const isOwner = (c.auth_user_id === req.user.id) ||
+      (c.details && c.details.auth_user_id === req.user.id) ||
+      (req.profile.wallet_address && c.creator && c.creator.toLowerCase() === req.profile.wallet_address.toLowerCase());
+
+    if (!isOwner) {
+      return res.status(403).json({ error: 'Forbidden: You can only submit evidence for your own commitment' });
+    }
+
+    if (c.status === 'SETTLED') {
+      return res.status(400).json({ error: 'Cannot submit evidence for settled commitment' });
+    }
+    const EVIDENCE_LOCKED = ['VERIFIED', 'CANCELLED', 'EXPIRED', 'CREATED'];
+    if (EVIDENCE_LOCKED.includes(c.status)) {
+      return res.status(400).json({ error: `Cannot submit evidence while commitment is '${c.status}'.` });
+    }
+
+    // Accept both the legacy and dashboard payload shapes
+    const body = req.body || {};
+    const evidenceType = body.evidenceType || body.type;
+    const description = typeof body.description === 'string' ? body.description.slice(0, 1000) : body.description;
+    const mediaUrl = body.mediaUrl || body.content;
+    const { checklist, location } = body;
+    if (!description && !mediaUrl && (!checklist || checklist.length === 0)) {
+      return res.status(400).json({ error: 'Evidence description, checklist, or media is required' });
+    }
+    if (mediaUrl && String(mediaUrl).length > 2048) {
+      return res.status(400).json({ error: 'Evidence reference too long (max 2048 chars). Upload large media off-chain and submit its URL.' });
+    }
+
+    const evidencePayload = {
+      evidenceType: evidenceType || 'general',
+      description: description || 'Proof of goal completion',
+      mediaUrl: mediaUrl || null,
+      checklist: checklist || [],
+      location: location || null,
+      submittedBy: req.user.id,
+      submittedAt: new Date().toISOString()
+    };
+
+    // Hash evidence for immutable cryptographic integrity
+    const evidenceHash = hashEvidence(evidencePayload);
+    evidencePayload.hash = evidenceHash;
+
+    const history = Array.isArray(c.details?.evidenceHistory) ? c.details.evidenceHistory : [];
+    c.details = {
+      ...(c.details || {}),
+      evidence: evidencePayload,
+      evidenceHistory: [...history, evidencePayload].slice(-25)
+    };
+    // Disputed commitments stay frozen; evidence is attached for the reviewer only
+    if (c.status !== 'DISPUTED') {
+      c.status = 'PENDING_VERIFICATION';
+    }
+
+    await dbSaveCommitment(c);
+
+    // Dispatch notification
+    notificationManager.dispatch({
+      userId: req.user.id,
+      type: 'VERIFICATION_REQUESTED',
+      title: 'Evidence Submitted',
+      message: `Evidence submitted for "${c.title}". SHA-256 integrity hash: ${evidenceHash.slice(0, 14)}...`,
+      commitmentId: c.id
+    });
+
+    res.json({
+      message: 'Evidence submitted securely off-chain with cryptographic hash recorded',
+      commitment: c,
+      evidenceHash,
+      hash: evidenceHash
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Create new commitment (STRICT INPUT VALIDATION + SUPABASE PERSISTENCE)
@@ -259,6 +524,9 @@ app.post('/api/commitments/create', async (req, res) => {
     id,
     title: title.trim(),
     creator: creator || (profile && profile.wallet_address) || 'DemoCreatorWallet111111111111111111111111111111',
+    auth_user_id: authUser.id,
+    creator_username: profile.username,
+    creator_name: profile.display_name,
     stakingMode: mode,
     stakeAmount: stake,
     penaltyAmount: penalty,
@@ -267,13 +535,49 @@ app.post('/api/commitments/create', async (req, res) => {
     failurePolicy: failurePolicy || 'PARTIAL_RETURN',
     failurePolicyText: failurePolicyText || 'Consequence defined',
     status: 'CREATED',
-    details: details || {},
+    details: {
+      ...(details || {}),
+      auth_user_id: authUser.id,
+      creator_username: profile.username
+    },
     createdAt: new Date().toISOString(),
-    expiresAt: new Date(Date.now() + 7 * 24 * 3600000).toISOString()
+    expiresAt: (() => {
+      const d = Number(details?.durationDays || details?.requiredDays || details?.deadlineDays) || 7;
+      const days = Math.min(90, Math.max(1, Math.floor(d)));
+      return new Date(Date.now() + days * 24 * 3600000).toISOString();
+    })()
   };
 
   commitments.set(id, newCommitment);
   await dbSaveCommitment(newCommitment);
+
+  // If verifier type is peer or physical, register verification request in verifierManager
+  if (verifierType === 'peer_consensus' || verifierType === 'human_physical') {
+    await verifierManager.createRequest({
+      commitmentId: id,
+      userId: profile.id,
+      authUserId: authUser.id,
+      userWallet: creator || profile.wallet_address,
+      taskSummary: title,
+      stake,
+      verifierFee: fee,
+      verificationType: verifierType,
+      criteria: [failurePolicyText || title],
+      locationRequirement: details?.locationRequirement || null,
+      checklist: details?.checklist || null
+    }).catch(() => {});
+  }
+
+  // Authoritative notification & stats update
+  notificationManager.dispatch({
+    userId: authUser.id,
+    type: 'COMMITMENT_CREATED',
+    title: 'Commitment Created',
+    message: `Created "${newCommitment.title}" for ${newCommitment.stakeAmount} USDC.`,
+    commitmentId: newCommitment.id
+  });
+
+  await calculateUserStats(authUser.id, profile.wallet_address, commitments);
 
   res.status(201).json(newCommitment);
 });
@@ -284,11 +588,42 @@ app.post('/api/commitments/:id/fund', async (req, res) => {
   if (!c) return res.status(404).json({ error: 'Commitment not found' });
   if (c.status !== 'CREATED') return res.status(400).json({ error: 'Already funded or not in created state' });
 
+  // Optional authentication check for ownership
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    try {
+      const token = authHeader.split(' ')[1];
+      const { data: { user } } = await supabaseAdmin.auth.getUser(token);
+      if (user && c.auth_user_id && c.auth_user_id !== user.id) {
+        return res.status(403).json({ error: 'Forbidden: You can only fund your own commitment' });
+      }
+    } catch (_) {}
+  }
+
   c.status = 'ACTIVE';
   c.fundedAt = new Date().toISOString();
   c.escrowPda = escrowClient.findEscrowVaultPda(c.id)[0].toBase58();
 
   await dbSaveCommitment(c);
+
+  if (c.auth_user_id) {
+    notificationManager.dispatch({
+      userId: c.auth_user_id,
+      type: 'COMMITMENT_FUNDED',
+      title: 'Commitment Funded',
+      message: `${c.stakeAmount} USDC locked in Solana Escrow PDA for "${c.title}".`,
+      commitmentId: c.id
+    });
+    notificationManager.dispatch({
+      userId: c.auth_user_id,
+      type: 'COMMITMENT_ACTIVATED',
+      title: 'Commitment Active',
+      message: `Your commitment "${c.title}" is now active in Solana Escrow!`,
+      commitmentId: c.id
+    });
+    await calculateUserStats(c.auth_user_id, c.creator, commitments);
+  }
+
   res.json({ message: 'Commitment funded and active', commitment: c });
 });
 
@@ -321,6 +656,17 @@ app.post('/api/verify/github', async (req, res) => {
     c.attestation = attestation;
 
     await dbSaveCommitment(c);
+
+    if (c.auth_user_id) {
+      notificationManager.dispatch({
+        userId: c.auth_user_id,
+        type: 'VERIFICATION_COMPLETED',
+        title: `GitHub Verification: ${attestation.isSuccessful ? 'PASS' : 'FAIL'}`,
+        message: `${attestation.resultCode}: ${attestation.verifiedMetric}/${attestation.requiredMetric} qualifying commits verified.`,
+        commitmentId: c.id
+      });
+      await calculateUserStats(c.auth_user_id, c.creator, commitments);
+    }
 
     const commitsList = (attestation.evidencePayload && attestation.evidencePayload.commits) ? attestation.evidencePayload.commits : [];
 
@@ -366,6 +712,17 @@ app.post('/api/verify/study/finish', async (req, res) => {
   c.attestation = attestation;
 
   await dbSaveCommitment(c);
+
+  if (c.auth_user_id) {
+    notificationManager.dispatch({
+      userId: c.auth_user_id,
+      type: 'VERIFICATION_COMPLETED',
+      title: `Focus Session: ${attestation.isSuccessful ? 'PASS' : 'FAIL'}`,
+      message: `Focus verification complete: ${attestation.resultCode}.`,
+      commitmentId: c.id
+    });
+    await calculateUserStats(c.auth_user_id, c.creator, commitments);
+  }
 
   res.json({ commitment: c, attestation, isSignatureValid: verifyAttestationSignature(attestation) });
 });
@@ -441,6 +798,17 @@ app.post('/api/verify/peer/vote', async (req, res) => {
         c.status = 'VERIFIED';
         c.attestation = result.attestation;
         await dbSaveCommitment(c);
+
+        if (c.auth_user_id) {
+          notificationManager.dispatch({
+            userId: c.auth_user_id,
+            type: 'VERIFICATION_COMPLETED',
+            title: `Peer Review: ${result.attestation.isSuccessful ? 'PASS' : 'FAIL'}`,
+            message: `2-of-3 Peer Consensus reached: ${result.attestation.resultCode}.`,
+            commitmentId: c.id
+          });
+          await calculateUserStats(c.auth_user_id, c.creator, commitments);
+        }
       }
     }
 
@@ -451,12 +819,25 @@ app.post('/api/verify/peer/vote', async (req, res) => {
 });
 
 // --- DISPUTE ENDPOINTS (FORMAL 5-STATE LIFECYCLE) ---
-app.post('/api/commitments/:id/dispute', async (req, res) => {
+app.post('/api/commitments/:id/dispute', requireAuth, requireActive, async (req, res) => {
   try {
     const c = commitments.get(req.params.id);
     if (!c) return res.status(404).json({ error: 'Commitment not found' });
-    if (c.status !== 'VERIFIED') {
-      return res.status(400).json({ error: 'Can only dispute verified commitments before settlement' });
+
+    // Ownership is checked BEFORE state so attackers cannot probe commitment states
+    const isOwner = (c.auth_user_id === req.user.id) ||
+      (c.details && c.details.auth_user_id === req.user.id) ||
+      (req.profile && req.profile.wallet_address && c.creator && c.creator.toLowerCase() === req.profile.wallet_address.toLowerCase());
+    if (!isOwner) {
+      return res.status(403).json({ error: 'Forbidden: You can only dispute your own commitments' });
+    }
+
+    if (c.status !== 'VERIFIED' && c.status !== 'PENDING_VERIFICATION') {
+      return res.status(400).json({ error: 'Can only dispute commitments that are pending verification or verified (before settlement)' });
+    }
+    const reasonText = String((req.body && req.body.reason) || '').trim();
+    if (reasonText.length < 5) {
+      return res.status(400).json({ error: 'A dispute reason of at least 5 characters is required' });
     }
 
     const { reason, evidence } = req.body || {};
@@ -469,6 +850,16 @@ app.post('/api/commitments/:id/dispute', async (req, res) => {
     });
 
     await dbSaveCommitment(c);
+
+    if (c.auth_user_id) {
+      notificationManager.dispatch({
+        userId: c.auth_user_id,
+        type: 'DISPUTE_OPENED',
+        title: 'Dispute Registered',
+        message: `Dispute opened for "${c.title}". Normal settlement is frozen pending administrative review.`,
+        commitmentId: c.id
+      });
+    }
 
     try {
       await logAudit({
@@ -491,7 +882,16 @@ app.post('/api/commitments/:id/dispute', async (req, res) => {
   }
 });
 
-app.get('/api/commitments/:id/dispute', async (req, res) => {
+app.get('/api/commitments/:id/dispute', requireAuth, async (req, res) => {
+  const c = commitments.get(req.params.id);
+  if (!c) return res.status(404).json({ error: 'Commitment not found' });
+  const isOwner = (c.auth_user_id === req.user.id) ||
+    (c.details && c.details.auth_user_id === req.user.id) ||
+    (req.profile && req.profile.wallet_address && c.creator && c.creator.toLowerCase() === req.profile.wallet_address.toLowerCase());
+  const isStaff = ['ADMIN', 'SUPER_ADMIN', 'VERIFIER'].includes(req.profile?.role);
+  if (!isOwner && !isStaff) {
+    return res.status(403).json({ error: 'Forbidden: You can only view disputes on your own commitments' });
+  }
   const dispute = disputeManager.getDisputeByCommitment(req.params.id);
   if (!dispute) {
     return res.status(404).json({ error: 'No dispute found for this commitment' });
@@ -545,6 +945,16 @@ app.post('/api/commitments/:id/resolve-dispute', requireAuth, requireRole(['ADMI
     });
     c.status = 'VERIFIED';
     await dbSaveCommitment(c);
+
+    if (c.auth_user_id) {
+      notificationManager.dispatch({
+        userId: c.auth_user_id,
+        type: 'DISPUTE_RESOLVED',
+        title: 'Dispute Resolved',
+        message: `Admin resolved dispute on "${c.title}" with outcome: ${resolution}.`,
+        commitmentId: c.id
+      });
+    }
 
     try {
       await logAudit({
@@ -739,6 +1149,19 @@ app.post('/api/commitments/:id/settle', async (req, res) => {
     c.settlement = settlementResult;
 
     await dbSaveCommitment(c);
+    await verifierManager.confirmSettlementReward(c.id, settlementResult).catch(() => {});
+
+    if (c.auth_user_id) {
+      notificationManager.dispatch({
+        userId: c.auth_user_id,
+        type: 'SETTLEMENT_COMPLETED',
+        title: 'Settlement Executed on Solana Devnet',
+        message: `Settlement completed for "${c.title}". Tx: ${settlementResult.txSignature ? settlementResult.txSignature.slice(0, 16) + '...' : 'Confirmed'}`,
+        commitmentId: c.id,
+        metadata: { txSignature: settlementResult.txSignature, explorerUrl: settlementResult.explorerUrl }
+      });
+      await calculateUserStats(c.auth_user_id, c.creator, commitments);
+    }
 
     res.json({ message: 'Settlement executed successfully on Solana Devnet', commitment: c });
   } catch (err) {

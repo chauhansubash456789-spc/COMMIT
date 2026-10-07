@@ -1,0 +1,89 @@
+<section id="tab-profile" class="tab-pane">
+      <div class="tab-header-box">
+        <h2 class="tab-main-title">👤 User Profile & Reputation</h2>
+        <p class="tab-subtitle">
+          Manage your personal identity information and inspect authoritative, system-generated reputation statistics computed directly from verified Solana commitments.
+        </p>
+      </div>
+
+      <div class="profile-grid-layout">
+        <!-- Personal Information -->
+        <div class="profile-panel">
+          <div class="profile-avatar-banner">
+            <div class="profile-avatar-large" id="profileAvatarInitial">U</div>
+            <div>
+              <h3 style="font-size:18px;font-weight:800;color:var(--text-primary);" id="profileDisplayNameHead">User</h3>
+              <span style="font-size:13px;color:var(--text-muted);font-family:var(--font-mono);" id="profileUsernameHead">@username</span>
+              <div style="margin-top:6px;">
+                <span class="role-pill role-user" id="profileRoleBadge">USER</span>
+              </div>
+            </div>
+          </div>
+
+          <form id="profileEditForm" onsubmit="handleSaveProfile(event)">
+            <div class="form-group">
+              <label class="form-label">Display Name</label>
+              <input type="text" class="form-input" id="profileDisplayNameInput" required placeholder="Display Name">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Username</label>
+              <input type="text" class="form-input input-dimmed" id="profileUsernameInput" disabled>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Email Address</label>
+              <input type="email" class="form-input input-dimmed" id="profileEmailInput" disabled>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Linked Solana Wallet (Devnet)</label>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <input type="text" class="form-input input-dimmed" id="profileWalletInput" readonly placeholder="No wallet linked">
+                <button type="button" class="btn btn-outline btn-sm" id="btnProfileLinkWallet" onclick="openWalletModal()">Link Phantom</button>
+                <button type="button" class="btn btn-outline btn-sm hidden" id="btnProfileDisconnectWallet" onclick="handleDisconnectWallet()" style="border-color:rgba(255,75,58,0.4);color:var(--sol-rose);">Disconnect</button>
+              </div>
+              <p style="font-size:11px;color:var(--text-tertiary);margin-top:4px;">Wallets are bound only after a server-issued nonce is signed and verified (replay- and expiry-protected).</p>
+            </div>
+            <button type="submit" class="btn btn-primary btn-full" id="btnSaveProfile">💾 Save Profile Changes</button>
+          </form>
+        </div>
+
+        <!-- System-Generated Reputation & Statistics (Immutable!) -->
+        <div class="profile-panel">
+          <h3 class="section-title-sm" style="margin-bottom:8px;">📊 Authoritative Reputation & Stats</h3>
+          <p style="font-size:12px;color:var(--text-secondary);margin-bottom:16px;">
+            System-calculated from your immutable on-chain escrow settlements and oracle attestations.
+          </p>
+
+          <div class="reputation-stats-grid">
+            <div class="reputation-stat-box">
+              <div class="stat-label">Total Commitments</div>
+              <div class="stat-val" id="profTotalCommitments">0</div>
+            </div>
+            <div class="reputation-stat-box">
+              <div class="stat-label">Successful</div>
+              <div class="stat-val" style="color:var(--sol-emerald);" id="profSuccessfulCommitments">0</div>
+            </div>
+            <div class="reputation-stat-box">
+              <div class="stat-label">Failed</div>
+              <div class="stat-val" style="color:var(--sol-rose);" id="profFailedCommitments">0</div>
+            </div>
+            <div class="reputation-stat-box">
+              <div class="stat-label">Success Rate</div>
+              <div class="stat-val" style="color:var(--sol-cyan);" id="profSuccessRate">100%</div>
+            </div>
+            <div class="reputation-stat-box">
+              <div class="stat-label">Current Streak</div>
+              <div class="stat-val" style="color:var(--hero-coral);" id="profCurrentStreak">0</div>
+            </div>
+            <div class="reputation-stat-box">
+              <div class="stat-label">Total Committed</div>
+              <div class="stat-val" style="color:var(--sol-purple);" id="profTotalCommitted">0.00 USDC</div>
+            </div>
+          </div>
+
+          <div class="non-editable-notice">
+            <span>🔒</span>
+            <span>These metrics are cryptographically verified and cannot be manually modified by users or verifiers.</span>
+          </div>
+        </div>
+      </div>
+    </section>

@@ -2,6 +2,7 @@ import express from 'express';
 import { supabaseAdmin, supabaseAnon } from './supabase.js';
 import { requireAuth, requireActive, requireVerifiedEmail, requireRole, logAudit } from './middleware.js';
 import { generateWalletChallenge, verifyWalletSignature, disconnectWallet, isValidSolanaAddress } from './walletAuth.js';
+import { verifierManager } from '../verifiers/verifierManager.js';
 
 export const authRouter = express.Router();
 
@@ -421,29 +422,66 @@ authRouter.post('/wallet/disconnect', requireAuth, requireActive, async (req, re
  */
 authRouter.post('/verifier/apply', requireAuth, requireActive, requireVerifiedEmail, async (req, res) => {
   try {
-    const { verificationTypes } = req.body;
+    const {
+      displayName,
+      bio,
+      specializations,
+      serviceArea,
+      verificationType,
+      verificationTypes,
+      availability,
+      profileImage
+    } = req.body;
 
     const { data: profile } = await supabaseAdmin
       .from('user_profiles')
-      .select('id')
+      .select('*')
       .eq('auth_user_id', req.user.id)
       .single();
 
+    // Client CANNOT submit role = VERIFIER, status = TRUSTED, accuracy = 100
+    // These are strictly server-controlled:
+    const dbPayload = {
+      user_id: profile.id,
+      verification_status: 'PENDING',
+      verification_level: 'NEW',
+      verification_types: verificationTypes || (specializations || ['peer_consensus', 'human_physical']),
+      updated_at: new Date().toISOString()
+    };
+
     const { data: verifier, error } = await supabaseAdmin
       .from('verifier_profiles')
-      .upsert({
-        user_id: profile.id,
-        verification_status: 'PENDING',
-        verification_level: 'NEW',
-        verification_types: verificationTypes || ['peer_consensus'],
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'user_id' })
+      .upsert(dbPayload, { onConflict: 'user_id' })
       .select()
       .single();
 
     if (error) {
       return res.status(400).json({ error: error.message });
     }
+
+    if (bio) {
+      await supabaseAdmin.from('user_profiles').update({ bio }).eq('id', profile.id);
+    }
+
+    // Update in-memory verifier manager state with full extended metadata
+    const verifierId = verifier.id;
+    const verifierObj = {
+      id: verifierId,
+      userId: profile.id,
+      displayName: displayName || profile.display_name,
+      bio: (bio || profile.bio || '').slice(0, 500),
+      specializations: dbPayload.verification_types,
+      serviceArea: (serviceArea || 'Remote').slice(0, 100),
+      verificationType: verificationType || 'human_physical',
+      status: 'PENDING',
+      level: 'NEW',
+      availability: availability || 'Available',
+      wallet: profile.wallet_address || 'UNLINKED',
+      profileImage: profileImage || profile.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=250&q=80',
+      createdAt: verifier.created_at || new Date().toISOString()
+    };
+    verifierManager.verifiers.set(verifierId, verifierObj);
+    verifierManager.verifiers.set(profile.id, verifierObj);
 
     // Init verifier stats if not existing
     await supabaseAdmin
@@ -458,7 +496,7 @@ authRouter.post('/verifier/apply', requireAuth, requireActive, requireVerifiedEm
       ipAddress: req.ip
     });
 
-    res.json({ message: 'Verifier application submitted successfully', verifier });
+    res.json({ message: 'Verifier application submitted successfully', verifier: verifierObj });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -553,11 +591,13 @@ authRouter.post('/admin/verifiers/:id/status', requireAuth, requireRole(['ADMIN'
         .from('user_profiles')
         .update({ role: 'VERIFIER', updated_at: new Date().toISOString() })
         .eq('id', updated.user_id);
+      await verifierManager.approveVerifier(updated.id, req.user.id).catch(() => {});
     } else if (verificationStatus === 'REVOKED' || verificationStatus === 'SUSPENDED') {
       await supabaseAdmin
         .from('user_profiles')
         .update({ role: 'USER', updated_at: new Date().toISOString() })
         .eq('id', updated.user_id);
+      await verifierManager.suspendVerifier(updated.id, req.user.id, reason).catch(() => {});
     }
 
     await logAudit({

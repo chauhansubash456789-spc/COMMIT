@@ -1,4 +1,4 @@
-﻿import crypto from 'crypto';
+import crypto from 'crypto';
 import { supabaseAdmin } from '../auth/supabase.js';
 import { logAudit } from '../auth/middleware.js';
 import { reputationManager } from '../reputation/reputationManager.js';
@@ -32,8 +32,9 @@ class DisputeManager {
       throw new Error('Commitment is required');
     }
 
-    if (commitment.status !== 'VERIFIED') {
-      throw new Error(`Cannot dispute commitment in state '${commitment.status}'. Must be 'VERIFIED'.`);
+    const DISPUTABLE_STATES = ['VERIFIED', 'PENDING_VERIFICATION'];
+    if (!DISPUTABLE_STATES.includes(commitment.status)) {
+      throw new Error(`Cannot dispute commitment in state '${commitment.status}'. Must be 'VERIFIED' or 'PENDING_VERIFICATION'.`);
     }
 
     if (this.commitmentToDispute.has(commitment.id)) {
@@ -63,6 +64,8 @@ class DisputeManager {
     this.commitmentToDispute.set(commitment.id, disputeId);
 
     // Freeze commitment settlement
+    commitment.preDisputeStatus = commitment.status;
+    commitment.disputeReason = disputeRecord.reason;
     commitment.status = 'DISPUTED';
     commitment.disputeId = disputeId;
     commitment.disputedAt = disputeRecord.created_at;
