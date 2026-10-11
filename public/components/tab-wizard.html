@@ -2,12 +2,12 @@
       <!-- LOCKED CARD WHEN NOT LOGGED IN -->
       <div id="wizardAuthRequiredCard" class="wizard-card wizard-auth-card">
         <div class="wizard-lock-icon">🔒</div>
-        <h3 class="wizard-auth-title">Authentication Required</h3>
+        <h3 class="wizard-auth-title">Wallet Authentication Required</h3>
         <p class="wizard-auth-desc">
-          You must be logged in to create commitments and lock USDC behind your promises. Sign in or register to get started.
+          You must connect your Solana wallet to create commitments and lock USDC behind your promises. Connect Phantom or Solflare to get started.
         </p>
-        <button class="btn btn-primary btn-auth-lock-action" onclick="state.pendingTab='tab-wizard';openAuthModal('signin')">
-          🔑 Sign In / Register to Create
+        <button class="btn btn-primary btn-auth-lock-action" onclick="state.pendingTab='tab-wizard';openWalletAuthModal()">
+          ⚡ Connect Wallet to Create Commitment
         </button>
       </div>
 

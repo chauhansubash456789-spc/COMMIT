@@ -71,11 +71,11 @@ export function requireVerifiedEmail(req, res, next) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const isVerified = Boolean(req.user.email_confirmed_at);
+  const isVerified = Boolean(req.user.email_confirmed_at) || Boolean(req.profile?.wallet_address);
   if (!isVerified) {
     return res.status(403).json({
-      error: 'Email Verification Required: Please verify your email address to access this feature.',
-      requiresEmailVerification: true
+      error: 'Verification Required: Please connect a verified Solana wallet to access this feature.',
+      requiresVerification: true
     });
   }
 

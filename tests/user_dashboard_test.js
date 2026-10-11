@@ -1,7 +1,35 @@
-import { describe, it } from 'node:test';
 import assert from 'node:assert';
+import nacl from 'tweetnacl';
+import bs58 from 'bs58';
 
 const API_BASE = 'http://localhost:3000';
+
+function encodeBase58(buffer) {
+  if (typeof bs58.encode === 'function') return bs58.encode(buffer);
+  if (bs58.default && typeof bs58.default.encode === 'function') return bs58.default.encode(buffer);
+  throw new Error('Base58 encode unavailable');
+}
+
+async function createWalletUser(username, displayName) {
+  const kp = nacl.sign.keyPair();
+  const walletAddress = encodeBase58(kp.publicKey);
+  const chal = await postJson('/api/auth/wallet/challenge', { walletAddress });
+  if (chal.status !== 200) {
+    throw new Error(`Failed to request challenge: ${JSON.stringify(chal.data)}`);
+  }
+  const sigBytes = nacl.sign.detached(new TextEncoder().encode(chal.data.message), kp.secretKey);
+  const auth = await postJson('/api/auth/wallet/authenticate', {
+    walletAddress,
+    nonce: chal.data.nonce,
+    signature: encodeBase58(sigBytes),
+    username,
+    displayName
+  });
+  if (auth.status !== 200) {
+    throw new Error(`Failed to authenticate wallet: ${JSON.stringify(auth.data)}`);
+  }
+  return { token: auth.data.session.access_token, user: auth.data.user, profile: auth.data.profile, walletAddress };
+}
 
 async function postJson(url, data, token = null) {
   const headers = { 'Content-Type': 'application/json' };
@@ -33,20 +61,14 @@ console.log('================================================================\n'
 
 async function runTests() {
   const ts = Date.now();
-  const userA = { email: `user_a_${ts}@commit.fun`, password: 'TestPassword123!', username: `user_a_${ts}`, displayName: 'Alice User' };
-  const userB = { email: `user_b_${ts}@commit.fun`, password: 'TestPassword123!', username: `user_b_${ts}`, displayName: 'Bob Attacker' };
 
-  console.log('--- Setup: Create Test Accounts User A & User B ---');
-  const regA = await postJson('/api/auth/signup', { email: userA.email, password: userA.password, confirmPassword: userA.password, username: userA.username, displayName: userA.displayName });
-  assert.strictEqual(regA.status, 201, 'User A signup must return 201');
-  const tokenA = regA.data.session.access_token;
-  const idA = regA.data.user.id;
+  console.log('--- Setup: Create Test Accounts User A & User B via Wallet Auth ---');
+  const userA = await createWalletUser(`user_a_${ts}`, 'Alice User');
+  const tokenA = userA.token;
 
-  const regB = await postJson('/api/auth/signup', { email: userB.email, password: userB.password, confirmPassword: userB.password, username: userB.username, displayName: userB.displayName });
-  assert.strictEqual(regB.status, 201, 'User B signup must return 201');
-  const tokenB = regB.data.session.access_token;
-  const idB = regB.data.user.id;
-  console.log('  ✓ PASS: User A & User B accounts created');
+  const userB = await createWalletUser(`user_b_${ts}`, 'Bob Attacker');
+  const tokenB = userB.token;
+  console.log('  ✓ PASS: User A & User B accounts created via Solana Wallet Authentication');
 
   console.log('\n--- 1. User Overview Metrics ---');
   const unauthOverview = await getJson('/api/user/overview');

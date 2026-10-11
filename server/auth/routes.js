@@ -1,7 +1,14 @@
 import express from 'express';
 import { supabaseAdmin, supabaseAnon } from './supabase.js';
 import { requireAuth, requireActive, requireVerifiedEmail, requireRole, logAudit } from './middleware.js';
-import { generateWalletChallenge, verifyWalletSignature, disconnectWallet, isValidSolanaAddress } from './walletAuth.js';
+import {
+  generateWalletChallenge,
+  verifyWalletSignature,
+  disconnectWallet,
+  isValidSolanaAddress,
+  generateWalletAuthChallenge,
+  authenticateWalletSignature
+} from './walletAuth.js';
 import { verifierManager } from '../verifiers/verifierManager.js';
 
 export const authRouter = express.Router();
@@ -11,197 +18,89 @@ const RESERVED_USERNAMES = new Set([
   'moderator', 'support', 'root', 'security', 'verifier'
 ]);
 
-// Email regex validator
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Username regex validator
 const USERNAME_REGEX = /^[a-zA-Z0-9_]{3,30}$/;
 
+// =============================================================================
+// PRIMARY WALLET AUTHENTICATION ROUTES (SIWS COMPLIANT)
+// =============================================================================
+
 /**
- * POST /api/auth/signup
+ * POST /api/auth/wallet/challenge
+ * Issues an authoritative, single-use, anti-replay SIWS cryptographic challenge
  */
-authRouter.post('/signup', async (req, res) => {
+authRouter.post('/wallet/challenge', async (req, res) => {
   try {
-    const { email, password, confirmPassword, username, displayName } = req.body;
-
-    // 1. Validation
-    if (!email || !password || !username || !displayName) {
-      return res.status(400).json({ error: 'All fields (email, password, username, displayName) are required' });
+    const { walletAddress, domain, origin } = req.body;
+    if (!walletAddress) {
+      return res.status(400).json({ error: 'walletAddress is required' });
     }
-
-    if (!EMAIL_REGEX.test(email)) {
-      return res.status(400).json({ error: 'Invalid email address format' });
-    }
-
-    if (password.length < 8) {
-      return res.status(400).json({ error: 'Password must be at least 8 characters long' });
-    }
-
-    if (confirmPassword && password !== confirmPassword) {
-      return res.status(400).json({ error: 'Passwords do not match' });
-    }
-
-    const cleanUsername = username.toLowerCase().trim();
-    if (!USERNAME_REGEX.test(cleanUsername)) {
-      return res.status(400).json({ error: 'Username must be 3-30 characters long and contain only letters, numbers, and underscores' });
-    }
-
-    if (RESERVED_USERNAMES.has(cleanUsername)) {
-      return res.status(400).json({ error: 'This username is reserved and cannot be registered' });
-    }
-
-    // Check username uniqueness in user_profiles
-    const { data: existingUser } = await supabaseAdmin
-      .from('user_profiles')
-      .select('id')
-      .eq('username', cleanUsername)
-      .maybeSingle();
-
-    if (existingUser) {
-      return res.status(409).json({ error: 'Username is already taken. Please choose another username.' });
-    }
-
-    // 2. Create User authoritatively
-    const { data: newUserData, error: createError } = await supabaseAdmin.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-      user_metadata: {
-        display_name: displayName.trim(),
-        username: cleanUsername
-      }
-    });
-
-    if (createError) {
-      if (createError.message.toLowerCase().includes('already registered') || createError.message.toLowerCase().includes('unique')) {
-        return res.status(400).json({ error: 'An account with this email address already exists' });
-      }
-      return res.status(400).json({ error: createError.message });
-    }
-
-    if (!newUserData || !newUserData.user) {
-      return res.status(400).json({ error: 'Failed to create user account' });
-    }
-
-    // 3. Generate initial session
-    const { data: sessionData } = await supabaseAnon.auth.signInWithPassword({
-      email,
-      password
-    });
-
-    // 4. Audit log
-    await logAudit({
-      actorUserId: newUserData.user.id,
-      action: 'SIGNUP',
-      targetType: 'USER',
-      targetId: newUserData.user.id,
-      metadata: { username: cleanUsername, email },
-      ipAddress: req.ip
-    });
-
-    res.status(201).json({
-      message: 'Account created successfully!',
-      user: {
-        id: newUserData.user.id,
-        email: newUserData.user.email,
-        emailConfirmed: Boolean(newUserData.user.email_confirmed_at)
-      },
-      session: sessionData?.session || null
-    });
+    const requestedTarget = origin || domain || req.headers.origin || null;
+    const challenge = await generateWalletAuthChallenge(walletAddress, requestedTarget, req.ip);
+    res.json(challenge);
   } catch (err) {
-    console.error('[Signup Error]', err.message);
-    res.status(500).json({ error: 'Internal signup error' });
+    res.status(400).json({ error: err.message });
   }
 });
 
 /**
- * POST /api/auth/login
+ * POST /api/auth/wallet/authenticate (also aliased at /api/auth/wallet/login)
+ * Primary Authentication Method:
+ * Verifies Ed25519 wallet signature, enforces single-use challenge & 5-minute expiry,
+ * provisions or loads user profile, and returns authenticated Supabase session JWT.
  */
-authRouter.post('/login', async (req, res) => {
+async function handleWalletAuthenticate(req, res) {
   try {
-    const { email, password } = req.body;
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Email and password are required' });
-    }
-
-    // Authenticate with Supabase Auth
-    const { data, error } = await supabaseAnon.auth.signInWithPassword({
-      email,
-      password
-    });
-
-    if (error || !data.user || !data.session) {
-      return res.status(401).json({ error: 'Invalid email or password' });
-    }
-
-    // Fetch user profile
-    const { data: profile, error: profileErr } = await supabaseAdmin
-      .from('user_profiles')
-      .select('*')
-      .eq('auth_user_id', data.user.id)
-      .single();
-
-    if (!profile || profileErr) {
-      return res.status(404).json({ error: 'User profile not found' });
-    }
-
-    // Enforce account status server-side
-    if (profile.status === 'DISABLED') {
-      // Invalidate session immediately
-      await supabaseAdmin.auth.admin.signOut(data.session.access_token);
-      return res.status(403).json({
-        error: 'Account Disabled: Your account has been permanently disabled. Access denied.',
-        status: 'DISABLED'
-      });
-    }
-
-    // Fetch user stats
-    const { data: stats } = await supabaseAdmin
-      .from('user_stats')
-      .select('*')
-      .eq('user_id', profile.id)
-      .maybeSingle();
-
-    // Check if user is also registered as admin
-    const { data: adminRecord } = await supabaseAdmin
-      .from('admin_users')
-      .select('admin_role, status')
-      .eq('user_id', profile.id)
-      .maybeSingle();
-
-    if (adminRecord && adminRecord.status === 'ACTIVE') {
-      await supabaseAdmin
-        .from('admin_users')
-        .update({ last_login_at: new Date().toISOString() })
-        .eq('id', adminRecord.id);
-    }
-
-    await logAudit({
-      actorUserId: data.user.id,
-      action: 'LOGIN',
-      targetType: 'SESSION',
-      targetId: data.session.user.id,
-      metadata: { role: profile.role, status: profile.status },
+    const { walletAddress, nonce, signature, origin, domain } = req.body;
+    const expectedOrigin = origin || domain || req.headers.origin || null;
+    const result = await authenticateWalletSignature({
+      walletAddress,
+      nonce,
+      signature,
+      expectedOrigin,
       ipAddress: req.ip
     });
-
-    res.json({
-      session: {
-        access_token: data.session.access_token,
-        refresh_token: data.session.refresh_token,
-        expires_at: data.session.expires_at
-      },
-      user: {
-        id: data.user.id,
-        email: data.user.email,
-        emailConfirmed: Boolean(data.user.email_confirmed_at)
-      },
-      profile,
-      stats: stats || {},
-      isAdmin: profile.role === 'ADMIN' || profile.role === 'SUPER_ADMIN'
-    });
+    res.json(result);
   } catch (err) {
-    console.error('[Login Error]', err.message);
-    res.status(500).json({ error: 'Internal login error' });
+    res.status(400).json({ error: err.message });
   }
+}
+
+authRouter.post('/wallet/authenticate', handleWalletAuthenticate);
+authRouter.post('/wallet/login', handleWalletAuthenticate);
+
+// =============================================================================
+// RETIRED TRADITIONAL EMAIL/PASSWORD AUTHENTICATION ROUTES
+// =============================================================================
+
+/**
+ * POST /api/auth/signup - RETIRED
+ */
+authRouter.post('/signup', (req, res) => {
+  res.status(410).json({
+    error: 'Traditional email/password signup is retired. Please authenticate via Solana Connect Wallet (/api/auth/wallet/challenge & /api/auth/wallet/authenticate).',
+    code: 'WALLET_AUTH_REQUIRED'
+  });
+});
+
+/**
+ * POST /api/auth/login - RETIRED
+ */
+authRouter.post('/login', (req, res) => {
+  res.status(410).json({
+    error: 'Traditional email/password login is retired. Please authenticate via Solana Connect Wallet (/api/auth/wallet/challenge & /api/auth/wallet/authenticate).',
+    code: 'WALLET_AUTH_REQUIRED'
+  });
+});
+
+/**
+ * POST /api/auth/forgot-password - RETIRED
+ */
+authRouter.post('/forgot-password', (req, res) => {
+  res.status(410).json({
+    error: 'Password reset is retired. Authentication is handled exclusively via cryptographic Solana wallet signatures.',
+    code: 'WALLET_AUTH_REQUIRED'
+  });
 });
 
 /**
@@ -209,7 +108,6 @@ authRouter.post('/login', async (req, res) => {
  */
 authRouter.post('/logout', requireAuth, async (req, res) => {
   try {
-    // Audit log
     await logAudit({
       actorUserId: req.user.id,
       action: 'LOGOUT',
@@ -217,42 +115,9 @@ authRouter.post('/logout', requireAuth, async (req, res) => {
       targetId: req.user.id,
       ipAddress: req.ip
     });
-
     res.json({ message: 'Successfully logged out and session cleared' });
   } catch (err) {
     res.status(500).json({ error: 'Logout error' });
-  }
-});
-
-/**
- * POST /api/auth/forgot-password
- * Never leaks whether email exists
- */
-authRouter.post('/forgot-password', async (req, res) => {
-  try {
-    const { email } = req.body;
-    if (email && EMAIL_REGEX.test(email)) {
-      await supabaseAnon.auth.resetPasswordForEmail(email, {
-        redirectTo: `${req.protocol}://${req.get('host')}/reset-password`
-      }).catch(() => {});
-
-      await logAudit({
-        actorUserId: null,
-        action: 'PASSWORD_RESET',
-        targetType: 'EMAIL',
-        targetId: email,
-        ipAddress: req.ip
-      });
-    }
-
-    // Always return constant message to avoid email enumeration
-    res.json({
-      message: 'If an account exists for this email, a password reset link has been sent.'
-    });
-  } catch (err) {
-    res.json({
-      message: 'If an account exists for this email, a password reset link has been sent.'
-    });
   }
 });
 

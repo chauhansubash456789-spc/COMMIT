@@ -1,10 +1,10 @@
 # ⚡ COMMIT PROTOCOL
 > **Put money behind your promise.**
-> *A Solana-native financial commitment & verification protocol with Blinks, No-Loss Staking, and Decentralized Attestations.*
+> *A Solana-native financial commitment & verification protocol with Blinks, No-Loss Staking, Connect Wallet Authentication, and Decentralized Attestations.*
 
 ---
 
-## 🏆 Colosseum Hackathon Strategy: From 6.4 to 10/10
+## 🏆 Core Architecture: Solana Connect Wallet & Verification Engine
 
 Traditional commitment apps (StickK, Beeminder) fail because **humans hate losing money** (high churn) and domestic physical verifications are operationally impossible ($1 task travel).
 
@@ -13,15 +13,18 @@ Traditional commitment apps (StickK, Beeminder) fail because **humans hate losin
 1. **🛡️ Dual Staking (Hardcore + No-Loss Yield Vaults):**
    - **Hardcore Mode:** Direct USDC principal locked in Solana Escrow PDA.
    - **No-Loss Mode:** USDC principal is deposited into a Kamino/MarginFi lending vault and is **100% safe**. On failure, **only the accrued yield** is forfeited to the verifier/pool. No more fear of losing principal!
-2. **👥 Decentralized Remote Peer Consensus (Replacing the in-person maid trap):**
+2. **🔑 Pure Solana Connect Wallet Authentication (SIWS-Standard):**
+   - **Primary Authentication:** Users sign in directly via Phantom, Solflare, or Standard Solana Wallet Adapters.
+   - **Cryptographic Challenge & Single-Use Nonce:** The backend generates an authoritative single-use 32-byte hex challenge nonce bound to domain, timestamp, and wallet address.
+   - **Ed25519 Signature Verification:** The backend verifies 64-byte Ed25519 signatures server-side via `tweetnacl`.
+   - **Database & RLS Integrity:** Transparently maps verified wallet addresses to PostgreSQL profiles (`user_profiles.wallet_address`) and issues authentic Supabase session JWTs without weakening Row Level Security.
+   - **Legacy Auth Retired:** Traditional email/password routes return `HTTP 410 Gone` (`WALLET_AUTH_REQUIRED`).
+3. **👥 Decentralized Remote Peer Consensus:**
    - Proof photos/videos must feature the live, dynamic **Solana Blockhash Challenge** (`SOL-7Z8z9x`), making pre-recorded evidence impossible.
    - 3 staked community verifiers review the proof; 2-of-3 consensus triggers automatic Ed25519 attestation & payout.
-3. **🔗 Solana Blinks (Actions) Native Integration:**
+4. **🔗 Solana Blinks (Actions) & On-Chain Escrow:**
    - Commitments can be unfurled and funded directly inside **X (Twitter)** or **Telegram** feeds with 1-click Dialect actions (`/api/actions/commit`).
-4. **🏛️ Cryptographic Trust & Settlement:**
-   - Off-chain evidence is SHA-256 hashed.
-   - Oracle / Peer multisig signs canonical attestations with an authorized **Ed25519** keypair.
-   - Solana Anchor smart contract verifies the Ed25519 signature on-chain before executing USDC escrow release.
+   - Off-chain evidence is SHA-256 hashed and Oracle-signed with Ed25519 keys before Solana Anchor settlement.
 
 ---
 
@@ -31,50 +34,72 @@ Traditional commitment apps (StickK, Beeminder) fail because **humans hate losin
 D:\Hackthon\
 ├── programs/
 │   └── commit-protocol/
-│       ├── Cargo.toml            # Anchor dependencies
+│       ├── Cargo.toml               # Anchor dependencies
 │       └── src/
-│           └── lib.rs            # Production Anchor Rust smart contract
+│           └── lib.rs               # Production Anchor Rust smart contract
 ├── server/
-│   ├── index.js                  # Express API & Devnet orchestration
+│   ├── index.js                     # Express API & Devnet orchestration
+│   ├── auth/
+│   │   ├── walletAuth.js            # SIWS challenge generation & Ed25519 signature auth
+│   │   ├── routes.js                # Wallet auth endpoints & 410 retired routes
+│   │   ├── middleware.js            # Bearer JWT session validation & RBAC gates
+│   │   └── supabase.js              # Authoritative Supabase admin/anon clients
 │   ├── oracle/
-│   │   └── attestation.js        # Ed25519 signing & SHA-256 evidence hashing
+│   │   └── attestation.js           # Ed25519 signing & SHA-256 evidence hashing
 │   ├── verifiers/
-│   │   ├── githubVerifier.js     # Real GitHub commit/SHA verifier
-│   │   ├── studyTimerVerifier.js # Deep Work timer with rotating nonces
+│   │   ├── githubVerifier.js        # Real GitHub commit/SHA verifier
+│   │   ├── studyTimerVerifier.js    # Deep Work timer with rotating nonces
 │   │   └── peerConsensusVerifier.js # Blockhash challenge & 2/3 peer voting
 │   ├── solana/
-│   │   └── escrowClient.js       # Solana Devnet PDA escrow & Explorer links
+│   │   └── escrowClient.js          # Solana Devnet PDA escrow & Explorer links
 │   └── blinks/
-│       └── actions.js            # Solana Actions & Blinks specification
+│       └── actions.js               # Solana Actions & Blinks specification
 ├── public/
-│   ├── index.html                # Web3 DApp Studio & Dashboards
+│   ├── index.html                   # Web3 DApp Studio & Dashboards
+│   ├── components/                  # Modular UI components (header, modal-auth, etc.)
 │   ├── css/
-│   │   └── style.css             # Solana Dark Obsidian / Emerald / Purple design
+│   │   └── style.css                # Solana Dark Obsidian / Emerald / Purple design system
 │   └── js/
-│       └── app.js                # Wallet simulator, live heartbeats & settlements
+│       ├── app.js                   # Connect Wallet orchestration, SIWS signing & UI logic
+│       └── nacl-fast.min.js         # Browser Ed25519 cryptographic signing engine
 ├── tests/
-│   └── runner.js                 # 12/12 passing integration tests
+│   ├── master_test_runner.js        # Master runner executing all 5 suites (130/130 pass)
+│   ├── auth_tests.js                # Wallet challenge, Ed25519 auth, replay & 410 tests
+│   ├── attack_tests.js              # 22 brutal adversarial attack tests (22/22 defended)
+│   ├── user_dashboard_test.js       # User metrics, IDOR defense & notifications
+│   ├── e2e_full_test.js             # Complete 10-step user commitment lifecycle
+│   ├── verifier_system_test.js      # Authoritative verifier lifecycle & checklist gates
+│   └── runner.js                    # Protocol engine unit test runner
 ├── package.json
 └── README.md
 ```
 
 ---
 
-## 🚀 Quickstart Guide
+## 🚀 Quickstart & Testing
 
-### 1. Run the Test Suite
+### 1. Run the Test Suites
 ```bash
-node tests/runner.js
+# 1. Start the backend node:
+npm start
+
+# 2. In a separate terminal, run all 5 master test suites:
+node tests/master_test_runner.js
+
+# 3. Run the adversarial attack battery:
+node tests/attack_tests.js
 ```
-Runs 12 comprehensive integration tests validating Ed25519 cryptographic signatures, anti-replay nonce rotation, GitHub commit filtering, peer consensus thresholds, and Solana Actions compliance.
+
+All 5 master suites (130/130 tests) and all 14 adversarial attack suites (22/22 defenses) run with 100% pass rate against the live backend and database.
 
 ### 2. Start the Protocol Node & Web DApp
 ```bash
 npm start
 ```
-Open **[http://localhost:3000](http://localhost:3000)** in your browser to interact with the full studio:
+Open **[http://localhost:3000](http://localhost:3000)** in your browser:
+- **Connect Wallet:** Click "Connect Wallet" in the header. Choose **Phantom**, **Solflare**, or use the **1-Click Devnet Evaluator** buttons (Alice, Bob, Charlie) to test cryptographic signing directly without browser extensions!
 - **Dashboard & Feed:** Track active commitments, stakes, and consequences.
-- **Create Commitment Wizard:** 4-step flow with visual consequence calculator.
+- **Create Commitment Wizard:** 4-step creation flow requiring connected wallet.
 - **Deep Work Focus Studio:** Live focus session with real rotating cryptographic nonces and server heartbeats.
 - **GitHub Verifier Studio:** Connect repo, inspect qualifying SHAs, and attest.
 - **Peer Verifier Portal:** Review proofs stamped with dynamic Solana Blockhash codes, vote, and claim verifier rewards.
@@ -101,11 +126,10 @@ $$\text{Created} \longrightarrow \text{Funded} \longrightarrow \text{Active} \lo
 
 ---
 
-## 🎬 3-Minute Hackathon Demo Script
+## 🔐 Security & Anti-Fraud Architecture
 
-1. **Scene 1 (0:00 - 0:45) — The Problem & Solution:** Show the Dashboard. Explain why Web2 habit apps fail (churn) and introduce Commit's dual-mode staking (Hardcore + No-Loss Kamino Vaults).
-2. **Scene 2 (0:45 - 1:30) — Solana Blinks:** Unfurl a commitment inside the Twitter card simulator. Show 1-click funding via Solana Actions.
-3. **Scene 3 (1:30 - 2:15) — Pluggable Verification:** 
-   - Demonstrate the **Deep Work Focus Studio** with live rotating cryptographic nonces.
-   - Demonstrate **Remote Peer Consensus** with the dynamic Solana Blockhash challenge (`SOL-7Z8z9x`).
-4. **Scene 4 (2:15 - 3:00) — On-Chain Settlement:** Settle on Solana Devnet. Show the Explorer modal containing the verified Ed25519 Oracle signature, SHA-256 evidence hash, and recipient payout!
+- **Single-Use Challenge Nonce:** 32-byte cryptographic random hex with 5-minute expiry and atomic consumption in PostgreSQL (`wallet_auth_nonces`).
+- **Ed25519 Cryptographic Verification:** All signatures verified independently via `tweetnacl` server-side before session JWT creation.
+- **Anti-IDOR Protection:** All commitment operations verify `auth.uid()` against commitment creator wallet.
+- **Strict Role Boundaries:** Normal users cannot escalate to `VERIFIER` or `ADMIN` roles; admin privileges require direct service-role elevation and entry in `admin_users`.
+- **Settlement Idempotency:** Double settlement and reward diversion strictly rejected. Active disputes immediately freeze normal settlement.

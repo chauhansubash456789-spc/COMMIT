@@ -1938,22 +1938,26 @@ function updateAuthUI() {
     const p = state.auth.profile;
     const initial = (p.display_name || p.username || 'U').charAt(0).toUpperCase();
     const roleClass = p.role === 'ADMIN' || p.role === 'SUPER_ADMIN' ? 'role-admin' : p.role === 'VERIFIER' ? 'role-verifier' : 'role-user';
-    const hasWallet = Boolean(p.wallet_address);
+    const wallet = p.wallet_address || state.wallet.address;
+    const shortWallet = wallet ? `${wallet.slice(0, 4)}...${wallet.slice(-4)}` : 'Connected';
+
+    // Sync header wallet display
+    if (wallet) {
+      state.wallet.address = wallet;
+      const addrEl = document.getElementById('walletAddress');
+      if (addrEl) addrEl.textContent = shortWallet;
+    }
 
     section.innerHTML = `
       <div class="user-badge" id="userBadgeProfile">
         <div class="user-avatar-circle">${initial}</div>
         <div style="display:flex;flex-direction:column;line-height:1.2;">
-          <span style="font-weight:600;color:#fff;">${escapeHtml(p.display_name)}</span>
-          <span style="font-size:0.7rem;color:var(--text-muted);">@${escapeHtml(p.username)}</span>
+          <span style="font-weight:700;color:#fff;">${escapeHtml(p.display_name)}</span>
+          <span style="font-size:0.75rem;color:var(--sol-emerald);font-family:var(--font-mono);">⚡ ${shortWallet}</span>
         </div>
         <span class="role-pill ${roleClass}">${p.role}</span>
         ${p.status === 'SUSPENDED' ? '<span class="status-badge status-suspended">SUSPENDED</span>' : ''}
-        ${hasWallet 
-          ? `<span title="Cryptographically Verified Solana Wallet" style="font-size:0.75rem;color:var(--sol-emerald);background:rgba(20,241,149,0.1);padding:0.15rem 0.45rem;border-radius:20px;border:1px solid rgba(20,241,149,0.3);">✓ ${p.wallet_address.slice(0,4)}...${p.wallet_address.slice(-4)}</span>` 
-          : `<button class="btn btn-outline btn-sm" onclick="openWalletModal()" style="font-size:0.7rem;padding:0.2rem 0.5rem;border-color:var(--sol-purple);color:var(--sol-purple);">🔗 Link Phantom</button>`
-        }
-        <button class="btn btn-outline btn-sm" onclick="handleLogout()" style="padding:0.2rem 0.5rem;font-size:0.7rem;margin-left:0.25rem;">Logout</button>
+        <button class="btn btn-outline btn-sm btn-disconnect-wallet" onclick="handleWalletDisconnect()" title="Disconnect Wallet" style="padding:0.25rem 0.6rem;font-size:0.75rem;margin-left:0.35rem;border-color:rgba(255,255,255,0.2);">Disconnect</button>
       </div>
     `;
 
@@ -1962,61 +1966,137 @@ function updateAuthUI() {
     }
   } else {
     section.innerHTML = `
-      <button class="btn btn-outline btn-sm" id="btnOpenAuth" onclick="openAuthModal('signin')" style="border-color:rgba(0,240,255,0.4);color:var(--sol-cyan);">
-        <span>🔑 Sign In / Register</span>
+      <button class="btn btn-primary btn-sm btn-connect-wallet" id="btnConnectWallet" onclick="openWalletAuthModal()">
+        <span class="btn-wallet-icon">⚡</span>
+        <span class="btn-wallet-text">Connect Wallet</span>
       </button>
     `;
     if (adminTab) adminTab.style.display = 'none';
   }
 }
 
-function openAuthModal(tab = 'signin') {
-  const modal = document.getElementById('authModalOverlay');
-  if (modal) {
-    modal.classList.add('open');
-    switchAuthTab(tab);
+// Global Base58 utilities for browser
+const BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+function toBase58(bytes) {
+  if (!bytes || bytes.length === 0) return '';
+  const digits = [];
+  for (let i = 0; i < bytes.length; i++) {
+    let carry = bytes[i];
+    for (let j = 0; j < digits.length; j++) {
+      carry += digits[j] << 8;
+      digits[j] = carry % 58;
+      carry = (carry / 58) | 0;
+    }
+    while (carry > 0) {
+      digits.push(carry % 58);
+      carry = (carry / 58) | 0;
+    }
   }
+  let str = '';
+  for (let i = 0; i < bytes.length && bytes[i] === 0; i++) str += '1';
+  for (let i = digits.length - 1; i >= 0; i--) str += BASE58_ALPHABET[digits[i]];
+  return str;
+}
+
+function fromBase58(str) {
+  if (!str || typeof str !== 'string') return new Uint8Array(0);
+  const bytes = [0];
+  for (let i = 0; i < str.length; i++) {
+    const c = str[i];
+    const val = BASE58_ALPHABET.indexOf(c);
+    if (val === -1) throw new Error('Invalid Base58 character: ' + c);
+    for (let j = 0; j < bytes.length; j++) bytes[j] *= 58;
+    bytes[0] += val;
+    let carry = 0;
+    for (let j = 0; j < bytes.length; j++) {
+      bytes[j] += carry;
+      carry = bytes[j] >> 8;
+      bytes[j] &= 0xff;
+    }
+    while (carry > 0) {
+      bytes.push(carry & 0xff);
+      carry >>= 8;
+    }
+  }
+  for (let i = 0; i < str.length && str[i] === '1'; i++) bytes.push(0);
+  return new Uint8Array(bytes.reverse());
+}
+
+/**
+ * Opens Connect Wallet Modal and detects installed Solana providers
+ */
+function openWalletAuthModal() {
+  const modal = document.getElementById('authModalOverlay');
+  if (!modal) return;
+  modal.classList.add('open');
+  resetWalletAuthUI();
+
+  // Detect Phantom
+  const phantomDetected = Boolean(window.solana && window.solana.isPhantom) || Boolean(window.phantom && window.phantom.solana);
+  const phantomStatus = document.getElementById('phantomStatusText');
+  const phantomBadge = document.getElementById('phantomBadge');
+  if (phantomStatus && phantomBadge) {
+    if (phantomDetected) {
+      phantomStatus.textContent = 'Installed (Extension Detected)';
+      phantomBadge.textContent = 'Connect';
+      phantomBadge.style.background = 'rgba(20,241,149,0.15)';
+      phantomBadge.style.color = 'var(--sol-emerald)';
+      phantomBadge.style.borderColor = 'rgba(20,241,149,0.3)';
+    } else {
+      phantomStatus.textContent = 'Solana browser extension';
+      phantomBadge.textContent = 'Connect';
+    }
+  }
+
+  // Detect Solflare
+  const solflareDetected = Boolean(window.solflare && window.solflare.isSolflare);
+  const solflareStatus = document.getElementById('solflareStatusText');
+  const solflareBadge = document.getElementById('solflareBadge');
+  if (solflareStatus && solflareBadge) {
+    if (solflareDetected) {
+      solflareStatus.textContent = 'Installed (Extension Detected)';
+      solflareBadge.textContent = 'Connect';
+      solflareBadge.style.background = 'rgba(20,241,149,0.15)';
+      solflareBadge.style.color = 'var(--sol-emerald)';
+      solflareBadge.style.borderColor = 'rgba(20,241,149,0.3)';
+    } else {
+      solflareStatus.textContent = 'Solana browser extension';
+      solflareBadge.textContent = 'Connect';
+    }
+  }
+}
+
+// Alias for backwards compatibility
+function openAuthModal(tab = null) {
+  openWalletAuthModal();
 }
 
 function closeAuthModal() {
   const modal = document.getElementById('authModalOverlay');
   if (modal) modal.classList.remove('open');
   clearAuthAlert();
+  resetWalletAuthUI();
 }
 
-function switchAuthTab(tab) {
-  const btnIn = document.getElementById('tabBtnSignIn');
-  const btnUp = document.getElementById('tabBtnSignUp');
-  const btnFg = document.getElementById('tabBtnForgot');
+function closeWalletModal() {
+  const modal = document.getElementById('walletChallengeModal');
+  if (modal) modal.classList.remove('open');
+}
 
-  const formIn = document.getElementById('formSignIn');
-  const formUp = document.getElementById('formSignUp');
-  const formFg = document.getElementById('formForgot');
-  const demoBox = document.getElementById('authDemoAccountsBox') || document.querySelector('.demo-accounts-box');
+function openWalletModal() {
+  openWalletAuthModal();
+}
 
-  if (!btnIn || !btnUp || !btnFg) return;
-  btnIn.classList.remove('active');
-  btnUp.classList.remove('active');
-  btnFg.classList.remove('active');
-
-  if (formIn) formIn.style.display = 'none';
-  if (formUp) formUp.style.display = 'none';
-  if (formFg) formFg.style.display = 'none';
+function resetWalletAuthUI() {
+  const stack = document.getElementById('walletOptionsStack');
+  const demoBox = document.querySelector('.demo-accounts-box');
+  const signingBox = document.getElementById('walletSigningProgress');
+  const onboardBox = document.getElementById('walletOnboardingBox');
+  if (stack) stack.style.display = 'flex';
+  if (demoBox) demoBox.style.display = 'block';
+  if (signingBox) signingBox.classList.add('hidden');
+  if (onboardBox) onboardBox.classList.add('hidden');
   clearAuthAlert();
-
-  if (tab === 'signup') {
-    btnUp.classList.add('active');
-    if (formUp) formUp.style.display = 'block';
-    if (demoBox) demoBox.style.display = 'none'; // Only show demo logins on Sign In tab
-  } else if (tab === 'forgot') {
-    btnFg.classList.add('active');
-    if (formFg) formFg.style.display = 'block';
-    if (demoBox) demoBox.style.display = 'none';
-  } else {
-    btnIn.classList.add('active');
-    if (formIn) formIn.style.display = 'block';
-    if (demoBox) demoBox.style.display = 'block';
-  }
 }
 
 function showAuthAlert(msg, isError = true) {
@@ -2034,42 +2114,218 @@ function clearAuthAlert() {
   }
 }
 
-async function handleSignIn(e) {
-  e.preventDefault();
+function setSigningProgress(stepTitle, stepDesc) {
+  const stack = document.getElementById('walletOptionsStack');
+  const demoBox = document.querySelector('.demo-accounts-box');
+  const signingBox = document.getElementById('walletSigningProgress');
+  const titleEl = document.getElementById('signingStateText');
+  const descEl = document.getElementById('signingSubText');
+
+  if (stack) stack.style.display = 'none';
+  if (demoBox) demoBox.style.display = 'none';
+  if (signingBox) signingBox.classList.remove('hidden');
+  if (titleEl) titleEl.textContent = stepTitle;
+  if (descEl) descEl.textContent = stepDesc;
+}
+
+/**
+ * Primary Authentication: Connects Solana Wallet (Phantom / Solflare / Standard),
+ * requests single-use server challenge, signs message, and validates on server.
+ */
+async function connectAndAuthenticateWallet(providerType = 'phantom') {
   clearAuthAlert();
-  const btn = document.getElementById('btnLoginSubmit');
-  btn.disabled = true;
-  btn.textContent = 'Verifying...';
+  let provider = null;
+  let providerName = 'Solana';
+
+  if (providerType === 'phantom') {
+    providerName = 'Phantom';
+    provider = (window.solana && window.solana.isPhantom) ? window.solana : (window.phantom?.solana || null);
+  } else if (providerType === 'solflare') {
+    providerName = 'Solflare';
+    provider = (window.solflare && window.solflare.isSolflare) ? window.solflare : (window.solflare || null);
+  } else {
+    provider = window.solana || null;
+  }
+
+  if (!provider) {
+    showAuthAlert(`${providerName} wallet was not detected. Please install ${providerName} extension or use a 1-Click Devnet Evaluator Wallet below.`, true);
+    return;
+  }
 
   try {
-    const email = document.getElementById('loginEmail').value.trim();
-    const password = document.getElementById('loginPassword').value;
+    // Step 1: Connect
+    setSigningProgress(`Connecting to ${providerName}...`, 'Please approve the connection in your wallet window.');
+    const resp = await provider.connect();
+    const walletAddress = resp.publicKey ? resp.publicKey.toString() : provider.publicKey.toString();
 
-    const res = await fetch(`${API_BASE}/api/auth/login`, {
+    // Step 2: Request Challenge Nonce
+    setSigningProgress('Requesting Authentication Challenge...', 'Generating cryptographically unpredictable challenge on server.');
+    const appOrigin = window.location.origin;
+    const appHost = window.location.host;
+    const challengeRes = await fetch(`${API_BASE}/api/auth/wallet/challenge`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password })
+      body: JSON.stringify({ walletAddress, origin: appOrigin, domain: appHost })
     });
 
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.error || 'Login failed');
+    const challengeData = await challengeRes.json();
+    if (!challengeRes.ok) {
+      throw new Error(challengeData.error || 'Failed to request challenge nonce from server');
     }
 
-    localStorage.setItem('commit_token', data.session.access_token);
-    state.auth.token = data.session.access_token;
-    state.auth.user = data.user;
-    state.auth.profile = data.profile;
-    state.auth.stats = data.stats;
-    state.auth.isAdmin = data.isAdmin;
+    // Step 3: Sign Message
+    setSigningProgress('Sign Authentication Challenge...', 'Please sign the SIWS message with your wallet to prove ownership.');
+    const encodedMessage = new TextEncoder().encode(challengeData.message);
+    const signedData = await provider.signMessage(encodedMessage, 'utf8');
 
-    if (data.profile.wallet_address) {
-      state.wallet.address = data.profile.wallet_address;
+    const rawSig = signedData.signature || signedData;
+    const signatureBase58 = toBase58(rawSig);
+
+    // Step 4: Verify on Server
+    setSigningProgress('Verifying Signature & Loading Profile...', 'Server is verifying Ed25519 signature and creating authenticated session.');
+    const authRes = await fetch(`${API_BASE}/api/auth/wallet/authenticate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        walletAddress,
+        nonce: challengeData.nonce,
+        signature: signatureBase58,
+        origin: window.location.origin
+      })
+    });
+
+    const authData = await authRes.json();
+    if (!authRes.ok) {
+      throw new Error(authData.error || 'Wallet authentication failed');
     }
+
+    // Success: store session
+    localStorage.setItem('commit_token', authData.session.access_token);
+    state.auth.token = authData.session.access_token;
+    state.auth.user = authData.user;
+    state.auth.profile = authData.profile;
+    state.auth.stats = authData.stats;
+    state.auth.isAdmin = authData.isAdmin;
+    state.wallet.address = walletAddress;
+
+    updateAuthUI();
+
+    if (authData.isNewUser) {
+      // First-time onboarding step
+      const signingBox = document.getElementById('walletSigningProgress');
+      const onboardBox = document.getElementById('walletOnboardingBox');
+      if (signingBox) signingBox.classList.add('hidden');
+      if (onboardBox) {
+        onboardBox.classList.remove('hidden');
+        const dName = document.getElementById('onboardDisplayName');
+        if (dName) dName.value = authData.profile.display_name;
+      }
+    } else {
+      closeAuthModal();
+      showToast(`Welcome back, ${authData.profile.display_name}! Connected via ${walletAddress.slice(0, 4)}...${walletAddress.slice(-4)}`);
+      await loadUserOverview();
+      await loadNotifications();
+      await loadMyCommitments();
+      loadUserProfile();
+
+      if (state.pendingTab) {
+        const targetBtn = document.querySelector(`[data-tab="${state.pendingTab}"]`);
+        if (targetBtn) targetBtn.click();
+        state.pendingTab = null;
+      }
+    }
+  } catch (err) {
+    resetWalletAuthUI();
+    showAuthAlert(err.message, true);
+  }
+}
+
+/**
+ * 1-Click Devnet Demo Keypair Authenticator (for Judges, Evaluators, and automated testing)
+ * Performs real cryptographic Ed25519 SIWS signing inside the browser using TweetNaCl
+ */
+async function connectDemoWalletKeypair(role = 'ALICE_CREATOR') {
+  clearAuthAlert();
+  setSigningProgress('Generating Cryptographic Keypair...', 'Initializing Ed25519 keypair for evaluator demo session.');
+
+  try {
+    let seedStr = 'alice_commit_creator_seed_2026';
+    if (role === 'BOB_VERIFIER') seedStr = 'bob_commit_verifier_seed_2026';
+    if (role === 'CHARLIE_ADMIN') seedStr = 'charlie_commit_admin_seed_2026';
+    if (role === 'NEW_USER') seedStr = 'fresh_user_' + Date.now();
+
+    // Use TweetNaCl for Ed25519 signing
+    if (typeof nacl === 'undefined' || !nacl.sign) {
+      throw new Error('TweetNaCl cryptographic library not loaded in browser');
+    }
+
+    // Create 32-byte seed
+    const rawBytes = new TextEncoder().encode(seedStr);
+    const seed = new Uint8Array(32);
+    for (let i = 0; i < 32; i++) seed[i] = rawBytes[i % rawBytes.length] ^ (i * 7);
+
+    const keypair = nacl.sign.keyPair.fromSeed(seed);
+    const walletAddress = toBase58(keypair.publicKey);
+
+    // 1. Request server challenge
+    setSigningProgress('Requesting Server Challenge Nonce...', `Wallet address: ${walletAddress.slice(0, 4)}...${walletAddress.slice(-4)}`);
+    const appOrigin = window.location.origin;
+    const appHost = window.location.host;
+    const challengeRes = await fetch(`${API_BASE}/api/auth/wallet/challenge`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ walletAddress, origin: appOrigin, domain: appHost })
+    });
+
+    const challengeData = await challengeRes.json();
+    if (!challengeRes.ok) {
+      throw new Error(challengeData.error || 'Failed to get challenge nonce');
+    }
+
+    // 2. Cryptographically sign message using private key
+    setSigningProgress('Cryptographically Signing Nonce...', 'Generating Ed25519 detached signature with verified keypair.');
+    const messageBytes = new TextEncoder().encode(challengeData.message);
+    const signatureBytes = nacl.sign.detached(messageBytes, keypair.secretKey);
+    const signatureBase58 = toBase58(signatureBytes);
+
+    // 3. Authenticate with server
+    setSigningProgress('Verifying Challenge on Server...', 'Checking single-use nonce, anti-replay, and Ed25519 signature.');
+    const authRes = await fetch(`${API_BASE}/api/auth/wallet/authenticate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        walletAddress,
+        nonce: challengeData.nonce,
+        signature: signatureBase58,
+        origin: window.location.origin
+      })
+    });
+
+    const authData = await authRes.json();
+    if (!authRes.ok) {
+      throw new Error(authData.error || 'Wallet authentication failed');
+    }
+
+    // If role is admin or verifier and account is new, update role for convenience in demo
+    if (role === 'CHARLIE_ADMIN' && authData.profile.role !== 'ADMIN') {
+      authData.profile.role = 'ADMIN';
+      authData.isAdmin = true;
+    }
+    if (role === 'BOB_VERIFIER' && authData.profile.role === 'USER') {
+      authData.profile.role = 'VERIFIER';
+    }
+
+    localStorage.setItem('commit_token', authData.session.access_token);
+    state.auth.token = authData.session.access_token;
+    state.auth.user = authData.user;
+    state.auth.profile = authData.profile;
+    state.auth.stats = authData.stats;
+    state.auth.isAdmin = authData.isAdmin;
+    state.wallet.address = walletAddress;
 
     updateAuthUI();
     closeAuthModal();
-    showToast(`Welcome back, ${data.profile.display_name}!`);
+    showToast(`Connected as ${authData.profile.display_name} (${walletAddress.slice(0, 4)}...${walletAddress.slice(-4)})`);
 
     await loadUserOverview();
     await loadNotifications();
@@ -2082,65 +2338,52 @@ async function handleSignIn(e) {
       state.pendingTab = null;
     }
   } catch (err) {
+    resetWalletAuthUI();
     showAuthAlert(err.message, true);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'Sign In to Commit';
   }
 }
 
-async function handleSignUp(e) {
+/**
+ * Handle First-Time User Onboarding Profile Setup
+ */
+async function handleWalletOnboarding(e) {
   e.preventDefault();
-  clearAuthAlert();
-  const btn = document.getElementById('btnSignupSubmit');
+  const dName = document.getElementById('onboardDisplayName').value.trim();
+  const bio = document.getElementById('onboardBio').value.trim();
+  const btn = document.getElementById('btnSubmitOnboard');
   btn.disabled = true;
-  btn.textContent = 'Creating Account...';
 
   try {
-    const email = document.getElementById('signupEmail').value.trim();
-    const username = document.getElementById('signupUsername').value.trim();
-    const displayName = document.getElementById('signupDisplayName').value.trim();
-    const password = document.getElementById('signupPassword').value;
-    const confirmPassword = document.getElementById('signupConfirmPassword').value;
-
-    const res = await fetch(`${API_BASE}/api/auth/signup`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, username, displayName, password, confirmPassword })
+    const res = await fetch(`${API_BASE}/api/auth/profile`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${state.auth.token}`
+      },
+      body: JSON.stringify({ displayName: dName, bio })
     });
-
     const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.error || 'Registration failed');
-    }
+    if (!res.ok) throw new Error(data.error);
 
-    if (data.session && data.session.access_token) {
-      localStorage.setItem('commit_token', data.session.access_token);
-      await initAuth();
-    }
-
-    showToast('Account registered successfully! Linking Phantom recommended.');
+    state.auth.profile = data.profile;
+    updateAuthUI();
     closeAuthModal();
-
+    showToast(`Welcome to Commit Protocol, ${data.profile.display_name}!`);
     await loadUserOverview();
     await loadNotifications();
     await loadMyCommitments();
     loadUserProfile();
-
-    if (state.pendingTab) {
-      const targetBtn = document.querySelector(`[data-tab="${state.pendingTab}"]`);
-      if (targetBtn) targetBtn.click();
-      state.pendingTab = null;
-    }
   } catch (err) {
     showAuthAlert(err.message, true);
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Create Commit Account';
   }
 }
 
-async function handleLogout() {
+/**
+ * Disconnects authenticated wallet and resets local state
+ */
+async function handleWalletDisconnect() {
   const token = state.auth.token;
   if (token) {
     await fetch(`${API_BASE}/api/auth/logout`, {
@@ -2148,158 +2391,26 @@ async function handleLogout() {
       headers: { Authorization: `Bearer ${token}` }
     }).catch(() => {});
   }
+  if (window.solana && window.solana.disconnect) {
+    try { await window.solana.disconnect(); } catch (_) {}
+  }
   localStorage.removeItem('commit_token');
   state.auth = { token: null, user: null, profile: null, stats: null, isAdmin: false };
   state.myCommitments = [];
   state.notifications = [];
   state.unreadNotifsCount = 0;
   state.userStats = null;
+  state.wallet.address = 'H4cK...3111';
   updateAuthUI();
   renderUserOverview(null);
   renderMyCommitments();
   renderNotifications([]);
   updateNotificationBadges(0);
-  showToast('Logged out successfully');
+  showToast('Wallet disconnected successfully');
 }
 
-async function handleForgotPassword(e) {
-  e.preventDefault();
-  clearAuthAlert();
-  const email = document.getElementById('forgotEmail').value.trim();
-  const btn = document.getElementById('btnForgotSubmit');
-  btn.disabled = true;
-
-  try {
-    const res = await fetch(`${API_BASE}/api/auth/forgot-password`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email })
-    });
-    const data = await res.json();
-    showAuthAlert(data.message, false);
-  } catch (err) {
-    showAuthAlert('If an account exists for this email, a password reset link has been sent.', false);
-  } finally {
-    btn.disabled = false;
-  }
-}
-
-function openWalletModal() {
-  const modal = document.getElementById('walletChallengeModal');
-  if (modal) modal.classList.add('open');
-}
-
-function closeWalletModal() {
-  const modal = document.getElementById('walletChallengeModal');
-  if (modal) modal.classList.remove('open');
-}
-
-// SOLANA PHANTOM WALLET NONCE & SIGNATURE HANDSHAKE
-async function executeWalletSignatureChallenge() {
-  const alertEl = document.getElementById('walletChallengeAlert');
-  const btn = document.getElementById('btnSignWalletAction');
-
-  if (!window.solana || !window.solana.isPhantom) {
-    if (alertEl) {
-      alertEl.className = 'auth-alert-box error';
-      alertEl.textContent = 'Phantom wallet not detected. Please install Phantom extension from phantom.app';
-    }
-    return;
-  }
-
-  if (!state.auth.token) {
-    if (alertEl) {
-      alertEl.className = 'auth-alert-box error';
-      alertEl.textContent = 'Please sign in to your Commit account before linking a Solana wallet.';
-    }
-    return;
-  }
-
-  btn.disabled = true;
-  btn.textContent = 'Connecting Phantom...';
-
-  try {
-    // 1. Connect Phantom wallet
-    const response = await window.solana.connect();
-    const walletAddress = response.publicKey.toString();
-
-    // 2. Request unique challenge nonce from server
-    btn.textContent = 'Requesting Challenge Nonce...';
-    const nonceRes = await fetch(`${API_BASE}/api/auth/wallet/nonce`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${state.auth.token}`
-      },
-      body: JSON.stringify({ walletAddress })
-    });
-
-    const nonceData = await nonceRes.json();
-    if (!nonceRes.ok) throw new Error(nonceData.error || 'Failed to generate challenge nonce');
-
-    // 3. User signs canonical message with Phantom
-    btn.textContent = 'Please Sign in Phantom Window...';
-    const encodedMessage = new TextEncoder().encode(nonceData.message);
-    const signedData = await window.solana.signMessage(encodedMessage, 'utf8');
-
-    // Convert signature Uint8Array to Base58
-    // Helper base58 encoder for browser
-    const ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
-    function toBase58(bytes) {
-      const digits = [];
-      for (let i = 0; i < bytes.length; i++) {
-        let carry = bytes[i];
-        for (let j = 0; j < digits.length; j++) {
-          carry += digits[j] << 8;
-          digits[j] = carry % 58;
-          carry = (carry / 58) | 0;
-        }
-        while (carry > 0) {
-          digits.push(carry % 58);
-          carry = (carry / 58) | 0;
-        }
-      }
-      let str = '';
-      for (let i = 0; i < bytes.length && bytes[i] === 0; i++) str += '1';
-      for (let i = digits.length - 1; i >= 0; i--) str += ALPHABET[digits[i]];
-      return str;
-    }
-
-    const signatureBase58 = toBase58(signedData.signature);
-
-    // 4. Verify signature on backend authoritatively
-    btn.textContent = 'Verifying Signature...';
-    const verifyRes = await fetch(`${API_BASE}/api/auth/wallet/verify`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${state.auth.token}`
-      },
-      body: JSON.stringify({
-        walletAddress,
-        nonce: nonceData.nonce,
-        signature: signatureBase58
-      })
-    });
-
-    const verifyData = await verifyRes.json();
-    if (!verifyRes.ok) throw new Error(verifyData.error || 'Cryptographic verification failed');
-
-    // 5. Update state
-    state.wallet.address = walletAddress;
-    state.auth.profile.wallet_address = walletAddress;
-    updateAuthUI();
-    closeWalletModal();
-    showToast(`Phantom wallet ${walletAddress.slice(0, 4)}...${walletAddress.slice(-4)} linked!`);
-  } catch (err) {
-    if (alertEl) {
-      alertEl.className = 'auth-alert-box error';
-      alertEl.textContent = err.message;
-    }
-  } finally {
-    btn.disabled = false;
-    btn.textContent = '✍️ Sign Challenge with Phantom';
-  }
+function handleLogout() {
+  handleWalletDisconnect();
 }
 
 async function loadAdminAuditLogs() {

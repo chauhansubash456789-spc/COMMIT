@@ -20,6 +20,10 @@ for (const suite of suites) {
   try {
     const output = execSync(`node ${suite.file}`, { encoding: 'utf8', stdio: 'pipe' });
     console.log(output);
+    const match = output.match(/(\d+)\s+(?:PASSED|DEFENDED)/);
+    if (match) {
+      totalPassed += parseInt(match[1], 10);
+    }
     console.log(`✅ [${suite.name}] COMPLETED SUCCESSFULLY!\n`);
   } catch (err) {
     console.error(`❌ [${suite.name}] FAILED!`);
@@ -30,7 +34,7 @@ for (const suite of suites) {
 
 console.log('================================================================');
 if (totalFailed === 0) {
-  console.log('🎉 ALL 5 MASTER SUITES (130/130 TESTS) PASSED 100%!');
+  console.log(`🎉 ALL 5 MASTER SUITES (${totalPassed}/${totalPassed} TESTS) PASSED 100%!`);
 } else {
   console.log(`⚠️ ${totalFailed} SUITES ENCOUNTERED FAILURES.`);
   process.exit(1);

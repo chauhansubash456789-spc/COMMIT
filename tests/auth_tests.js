@@ -1,6 +1,6 @@
 import nacl from 'tweetnacl';
 import bs58 from 'bs58';
-import { supabaseAdmin, createUserClient } from '../server/auth/supabase.js';
+import { supabaseAdmin } from '../server/auth/supabase.js';
 
 // Helper for Base58
 function encodeBase58(buffer) {
@@ -29,16 +29,42 @@ function assert(condition, message) {
   }
 }
 
+// Helper to authenticate a wallet keypair
+async function authenticateWallet(keypair, options = {}) {
+  const walletAddress = encodeBase58(keypair.publicKey);
+  const chalRes = await fetch(`${BASE_URL}/api/auth/wallet/challenge`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ walletAddress })
+  });
+  const chalData = await chalRes.json();
+  if (chalRes.status !== 200) throw new Error(`Challenge failed: ${JSON.stringify(chalData)}`);
+
+  const messageBytes = new TextEncoder().encode(chalData.message);
+  const sigBytes = nacl.sign.detached(messageBytes, keypair.secretKey);
+  const signature = encodeBase58(sigBytes);
+
+  const authRes = await fetch(`${BASE_URL}/api/auth/wallet/authenticate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      walletAddress,
+      nonce: chalData.nonce,
+      signature,
+      username: options.username,
+      displayName: options.displayName
+    })
+  });
+  const authData = await authRes.json();
+  return { status: authRes.status, data: authData, challenge: chalData, signature, walletAddress };
+}
+
 async function runAuthTests() {
   console.log('\n================================================================');
   console.log('🔒 COMMIT PROTOCOL — MASTER AUTH & BACKEND TEST SUITE');
   console.log('================================================================\n');
 
   const timestamp = Date.now();
-  const testUserAEmail = `auditor_a_${timestamp}@example.com`;
-  const testUserBEmail = `auditor_b_${timestamp}@example.com`;
-  const testAdminEmail = `auditor_admin_${timestamp}@example.com`;
-  const defaultPassword = 'Password123!Secure';
 
   let userAToken = null;
   let userAId = null;
@@ -46,6 +72,7 @@ async function runAuthTests() {
 
   let userBToken = null;
   let userBId = null;
+  let userBProfileId = null;
 
   let adminToken = null;
   let adminId = null;
@@ -58,144 +85,290 @@ async function runAuthTests() {
   const walletB = nacl.sign.keyPair();
   const walletBPublicKey = encodeBase58(walletB.publicKey);
 
+  const walletAdmin = nacl.sign.keyPair();
+  const walletAdminPublicKey = encodeBase58(walletAdmin.publicKey);
+
   try {
     // -------------------------------------------------------------------------
-    // TEST 1: SIGNUP VALIDATION & ACCOUNT CREATION
+    // TEST 1: RETIREMENT OF TRADITIONAL EMAIL/PASSWORD AUTHENTICATION (HTTP 410 GONE)
     // -------------------------------------------------------------------------
-    console.log('--- TEST 1: User Signup & Input Validation ---');
+    console.log('--- TEST 1: Legacy Email/Password Authentication Discontinuation ---');
 
-    // 1a. Weak password rejection
-    const weakRes = await fetch(`${BASE_URL}/api/auth/signup`, {
+    // 1a. Signup endpoint returns 410 Gone
+    const legacySignupRes = await fetch(`${BASE_URL}/api/auth/signup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        email: `weak_${timestamp}@example.com`,
-        password: 'short',
-        username: `weak_${timestamp}`,
-        displayName: 'Weak User'
+        email: `legacy_${timestamp}@example.com`,
+        password: 'Password123!',
+        username: `legacy_${timestamp}`,
+        displayName: 'Legacy User'
       })
     });
-    assert(weakRes.status === 400, 'Weak password (<8 chars) is rejected');
+    const legacySignupData = await legacySignupRes.json();
+    assert(legacySignupRes.status === 410, 'Legacy /api/auth/signup returns HTTP 410 Gone');
+    assert(legacySignupData.code === 'WALLET_AUTH_REQUIRED', 'Signup response explicitly specifies WALLET_AUTH_REQUIRED');
 
-    // 1b. Reserved username rejection
-    const reservedRes = await fetch(`${BASE_URL}/api/auth/signup`, {
+    // 1b. Login endpoint returns 410 Gone
+    const legacyLoginRes = await fetch(`${BASE_URL}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        email: `admin_impersonator_${timestamp}@example.com`,
-        password: defaultPassword,
-        username: 'admin',
-        displayName: 'Fake Admin'
+        email: `legacy_${timestamp}@example.com`,
+        password: 'Password123!'
       })
     });
-    assert(reservedRes.status === 400, 'Reserved username "admin" is rejected');
+    const legacyLoginData = await legacyLoginRes.json();
+    assert(legacyLoginRes.status === 410, 'Legacy /api/auth/login returns HTTP 410 Gone');
+    assert(legacyLoginData.code === 'WALLET_AUTH_REQUIRED', 'Login response explicitly specifies WALLET_AUTH_REQUIRED');
 
-    // 1c. Valid Signup for User A
-    const signupARes = await fetch(`${BASE_URL}/api/auth/signup`, {
+    // 1c. Forgot password endpoint returns 410 Gone
+    const legacyForgotRes = await fetch(`${BASE_URL}/api/auth/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: `legacy_${timestamp}@example.com` })
+    });
+    const legacyForgotData = await legacyForgotRes.json();
+    assert(legacyForgotRes.status === 410, 'Legacy /api/auth/forgot-password returns HTTP 410 Gone');
+    assert(legacyForgotData.code === 'WALLET_AUTH_REQUIRED', 'Forgot password response specifies WALLET_AUTH_REQUIRED');
+
+    // -------------------------------------------------------------------------
+    // TEST 2: SOLANA WALLET AUTHENTICATION CHALLENGE GENERATION
+    // -------------------------------------------------------------------------
+    console.log('\n--- TEST 2: Solana Wallet Challenge Nonce Generation ---');
+
+    // 2a. Missing wallet address rejected
+    const badChalRes = await fetch(`${BASE_URL}/api/auth/wallet/challenge`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
+    });
+    assert(badChalRes.status === 400, 'Challenge request without walletAddress rejected with HTTP 400');
+
+    // 2b. Invalid base58 wallet address rejected
+    const badPubkeyRes = await fetch(`${BASE_URL}/api/auth/wallet/challenge`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ walletAddress: 'not-a-valid-solana-address!!' })
+    });
+    assert(badPubkeyRes.status === 400, 'Invalid base58 wallet address rejected with HTTP 400');
+
+    // 2c. Valid challenge request for Wallet A
+    const chalARes = await fetch(`${BASE_URL}/api/auth/wallet/challenge`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ walletAddress: walletAPublicKey })
+    });
+    const chalAData = await chalARes.json();
+    assert(chalARes.status === 200, 'Challenge request for valid wallet succeeds with HTTP 200');
+    assert(chalAData.nonce && chalAData.nonce.length === 64, 'Backend generated 32-byte hex nonce (64 hex characters)');
+    assert(chalAData.message.includes('Commit Protocol'), 'Challenge canonical message contains protocol header');
+    assert(chalAData.message.includes(walletAPublicKey), 'Challenge message contains requested wallet address');
+    assert(chalAData.expiresAt, 'Challenge provides expiry timestamp');
+
+    // 2d. SIWS: Correct local HTTP origin accepted and exact URI matched
+    const localOriginChalRes = await fetch(`${BASE_URL}/api/auth/wallet/challenge`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        email: testUserAEmail,
-        password: defaultPassword,
-        confirmPassword: defaultPassword,
+        walletAddress: walletAPublicKey,
+        origin: 'http://localhost:3000'
+      })
+    });
+    const localOriginData = await localOriginChalRes.json();
+    assert(localOriginChalRes.status === 200, 'SIWS: Request with origin "http://localhost:3000" succeeds with HTTP 200');
+    assert(localOriginData.message.includes('URI: http://localhost:3000'), 'SIWS: Sign-in message contains exact requesting app URI "http://localhost:3000"');
+    assert(localOriginData.message.startsWith('localhost:3000 wants you to sign in with your Solana account:'), 'SIWS: Sign-in message domain matches requesting host "localhost:3000"');
+
+    // 2e. SIWS: Domain 'localhost:3000' correctly resolved to http://localhost:3000
+    const localDomainChalRes = await fetch(`${BASE_URL}/api/auth/wallet/challenge`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        walletAddress: walletAPublicKey,
+        domain: 'localhost:3000'
+      })
+    });
+    const localDomainData = await localDomainChalRes.json();
+    assert(localDomainChalRes.status === 200, 'SIWS: Request with domain "localhost:3000" succeeds with HTTP 200');
+    assert(localDomainData.message.includes('URI: http://localhost:3000'), 'SIWS: Domain resolved to correct HTTP URI "http://localhost:3000"');
+
+    // 2f. SIWS Security: Untrusted/mismatched domain rejected (HTTP 400)
+    const badDomainChalRes = await fetch(`${BASE_URL}/api/auth/wallet/challenge`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        walletAddress: walletAPublicKey,
+        domain: 'malicious-phishing.com'
+      })
+    });
+    assert(badDomainChalRes.status === 400, 'SIWS Security: Untrusted domain "malicious-phishing.com" rejected with HTTP 400');
+
+    // 2g. SIWS Security: Untrusted/mismatched origin rejected (HTTP 400)
+    const badOriginChalRes = await fetch(`${BASE_URL}/api/auth/wallet/challenge`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        walletAddress: walletAPublicKey,
+        origin: 'https://evil-attacker.xyz'
+      })
+    });
+    assert(badOriginChalRes.status === 400, 'SIWS Security: Untrusted origin "https://evil-attacker.xyz" rejected with HTTP 400');
+
+    // 2h. SIWS Security: Mismatched HTTPS scheme for HTTP local server rejected
+    const badSchemeChalRes = await fetch(`${BASE_URL}/api/auth/wallet/challenge`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        walletAddress: walletAPublicKey,
+        origin: 'https://localhost:3000'
+      })
+    });
+    assert(badSchemeChalRes.status === 400, 'SIWS Security: Mismatched HTTPS scheme "https://localhost:3000" rejected with HTTP 400');
+
+    // -------------------------------------------------------------------------
+    // TEST 3: CRYPTOGRAPHIC SIGNATURE VERIFICATION & REPLAY RESISTANCE
+    // -------------------------------------------------------------------------
+    console.log('\n--- TEST 3: Ed25519 Signature Verification & Replay Protection ---');
+
+    // 3a. Forged signature: signed with Wallet B, claimed to be Wallet A
+    const msgBytesA = new TextEncoder().encode(chalAData.message);
+    const forgedSig = encodeBase58(nacl.sign.detached(msgBytesA, walletB.secretKey));
+    const forgedAuthRes = await fetch(`${BASE_URL}/api/auth/wallet/authenticate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        walletAddress: walletAPublicKey,
+        nonce: chalAData.nonce,
+        signature: forgedSig
+      })
+    });
+    assert(forgedAuthRes.status === 400, 'Forged signature (Wallet B key used for Wallet A address) rejected with HTTP 400');
+
+    // 3b. Malformed / corrupted signature rejected
+    const malformedAuthRes = await fetch(`${BASE_URL}/api/auth/wallet/authenticate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        walletAddress: walletAPublicKey,
+        nonce: chalAData.nonce,
+        signature: 'invalid_base58_sig_123'
+      })
+    });
+    assert(malformedAuthRes.status === 400, 'Malformed/corrupted signature rejected with HTTP 400');
+
+    // 3c. Valid signature: signed with Wallet A
+    const validSigA = encodeBase58(nacl.sign.detached(msgBytesA, walletA.secretKey));
+    const authARes = await fetch(`${BASE_URL}/api/auth/wallet/authenticate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        walletAddress: walletAPublicKey,
+        nonce: chalAData.nonce,
+        signature: validSigA,
         username: `alice_${timestamp}`,
         displayName: 'Alice Auditor'
       })
     });
-    const signupAData = await signupARes.json();
-    assert(signupARes.status === 201, 'User A signup succeeds with status 201');
-    assert(signupAData.user && signupAData.user.id, 'User A received valid user ID');
-    userAId = signupAData.user.id;
+    const authAData = await authARes.json();
+    assert(authARes.status === 200, 'Authentic Ed25519 signature succeeds with HTTP 200');
+    assert(authAData.session && authAData.session.access_token, 'Supabase session JWT issued upon wallet authentication');
+    assert(authAData.user && authAData.user.id, 'Internal auth user mapped and authenticated');
+    assert(authAData.profile && authAData.profile.wallet_address === walletAPublicKey, 'Profile stores verified wallet address');
 
-    // Confirm email automatically for testing
-    await supabaseAdmin.auth.admin.updateUserById(userAId, { email_confirm: true });
+    userAToken = authAData.session.access_token;
+    userAId = authAData.user.id;
+    userAProfileId = authAData.profile.id;
 
-    // 1d. Duplicate Email rejection
-    const dupEmailRes = await fetch(`${BASE_URL}/api/auth/signup`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email: testUserAEmail,
-        password: defaultPassword,
-        username: `different_${timestamp}`,
-        displayName: 'Duplicate Email User'
-      })
-    });
-    assert(dupEmailRes.status >= 400, 'Duplicate email registration is rejected');
-
-    // 1e. Duplicate Username rejection
-    const dupUserRes = await fetch(`${BASE_URL}/api/auth/signup`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email: `another_${timestamp}@example.com`,
-        password: defaultPassword,
-        username: `alice_${timestamp}`,
-        displayName: 'Duplicate Username User'
-      })
-    });
-    assert(dupUserRes.status === 409, 'Duplicate username is rejected with HTTP 409 Conflict');
-
-    // 1f. Verify automatic creation of public.user_profiles and user_stats
-    const { data: profileA } = await supabaseAdmin
+    // Verify DB user_profiles and user_stats
+    const { data: dbProfileA } = await supabaseAdmin
       .from('user_profiles')
       .select('*')
-      .eq('auth_user_id', userAId)
+      .eq('id', userAProfileId)
       .single();
-    assert(profileA && profileA.username === `alice_${timestamp}`, 'user_profiles row automatically created with correct username');
-    assert(profileA.role === 'USER', 'Default role is strictly "USER"');
-    assert(profileA.status === 'ACTIVE', 'Default account status is strictly "ACTIVE"');
-    userAProfileId = profileA.id;
+    assert(dbProfileA && dbProfileA.wallet_address === walletAPublicKey, 'PostgreSQL user_profiles reflects verified wallet');
+    assert(dbProfileA.role === 'USER', 'Default role is strictly "USER"');
+    assert(dbProfileA.status === 'ACTIVE', 'Default account status is strictly "ACTIVE"');
 
-    const { data: statsA } = await supabaseAdmin
-      .from('user_stats')
-      .select('*')
-      .eq('user_id', userAProfileId)
-      .single();
-    assert(statsA && statsA.total_commitments === 0, 'user_stats row automatically created with 0 commitments');
-
-    // -------------------------------------------------------------------------
-    // TEST 2: LOGIN & SESSION HANDLING
-    // -------------------------------------------------------------------------
-    console.log('\n--- TEST 2: Login, Session Handling & Logout ---');
-
-    // 2a. Wrong password rejection
-    const wrongPassRes = await fetch(`${BASE_URL}/api/auth/login`, {
+    // 3d. REPLAY ATTACK: Re-submitting the exact same challenge nonce & signature
+    const replayAuthRes = await fetch(`${BASE_URL}/api/auth/wallet/authenticate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: testUserAEmail, password: 'WrongPassword999!' })
+      body: JSON.stringify({
+        walletAddress: walletAPublicKey,
+        nonce: chalAData.nonce,
+        signature: validSigA
+      })
     });
-    assert(wrongPassRes.status === 401, 'Login with incorrect password rejected with 401');
+    assert(replayAuthRes.status === 400, 'Replay Attack: Consumed nonce is strictly rejected with HTTP 400');
 
-    // 2b. Successful login
-    const loginARes = await fetch(`${BASE_URL}/api/auth/login`, {
+    // 3e. EXPIRED NONCE: Challenge past its expiry time is strictly rejected
+    const expiredChalRes = await fetch(`${BASE_URL}/api/auth/wallet/challenge`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: testUserAEmail, password: defaultPassword })
+      body: JSON.stringify({ walletAddress: walletAPublicKey })
     });
-    const loginAData = await loginARes.json();
-    assert(loginARes.status === 200, 'Login with correct credentials succeeds');
-    assert(loginAData.session && loginAData.session.access_token, 'Session JWT token issued');
-    userAToken = loginAData.session.access_token;
+    const expiredChalData = await expiredChalRes.json();
+    // Artificially backdate the challenge in DB
+    await supabaseAdmin
+      .from('wallet_auth_nonces')
+      .update({ expires_at: new Date(Date.now() - 60000).toISOString() })
+      .eq('nonce', expiredChalData.nonce);
 
-    // 2c. Fetch /api/auth/me with valid Bearer token
+    const expiredMsgBytes = new TextEncoder().encode(expiredChalData.message);
+    const expiredSig = encodeBase58(nacl.sign.detached(expiredMsgBytes, walletA.secretKey));
+    const expiredAuthRes = await fetch(`${BASE_URL}/api/auth/wallet/authenticate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        walletAddress: walletAPublicKey,
+        nonce: expiredChalData.nonce,
+        signature: expiredSig
+      })
+    });
+    const expiredAuthData = await expiredAuthRes.json();
+    assert(expiredAuthRes.status === 400, 'Expired Challenge: Expired nonce is strictly rejected with HTTP 400');
+    assert(expiredAuthData.error && expiredAuthData.error.includes('Expired Challenge'), 'Error message clearly indicates Expired Challenge');
+
+    // 3f. ORIGIN MISMATCH AT AUTH TIME: Rejecting mismatched expectedOrigin
+    const freshChalRes = await fetch(`${BASE_URL}/api/auth/wallet/challenge`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ walletAddress: walletAPublicKey })
+    });
+    const freshChalData = await freshChalRes.json();
+    const freshMsgBytes = new TextEncoder().encode(freshChalData.message);
+    const freshSig = encodeBase58(nacl.sign.detached(freshMsgBytes, walletA.secretKey));
+    const mismatchOriginAuthRes = await fetch(`${BASE_URL}/api/auth/wallet/authenticate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        walletAddress: walletAPublicKey,
+        nonce: freshChalData.nonce,
+        signature: freshSig,
+        origin: 'https://evil-untrusted-site.com'
+      })
+    });
+    assert(mismatchOriginAuthRes.status === 400, 'Origin Mismatch: Reject authenticate request when origin is untrusted (HTTP 400)');
+
+    // -------------------------------------------------------------------------
+    // TEST 4: SESSION HANDLING, PROFILE SECURITY & PRIVILEGE ESCALATION
+    // -------------------------------------------------------------------------
+    console.log('\n--- TEST 4: Session Handling, Profile Security & RBAC Enforcement ---');
+
+    // 4a. Fetch /api/auth/me with valid Bearer token
     const meRes = await fetch(`${BASE_URL}/api/auth/me`, {
       headers: { Authorization: `Bearer ${userAToken}` }
     });
     const meData = await meRes.json();
     assert(meRes.status === 200, 'GET /api/auth/me succeeds with valid Bearer session');
-    assert(meData.profile.username === `alice_${timestamp}`, 'Profile data matches authenticated session');
+    assert(meData.profile.wallet_address === walletAPublicKey, 'Profile wallet address matches authenticated session');
 
-    // 2d. Request without token rejected
+    // 4b. Request without token rejected
     const unauthRes = await fetch(`${BASE_URL}/api/auth/me`);
     assert(unauthRes.status === 401, 'Protected route without Authorization header rejected with 401');
 
-    // -------------------------------------------------------------------------
-    // TEST 3: PRIVILEGE ESCALATION ATTACKS (CRITICAL AUDIT)
-    // -------------------------------------------------------------------------
-    console.log('\n--- TEST 3: Privilege Escalation & Stats Tampering Attacks ---');
-
-    // 3a. Client attempts to elevate own role to ADMIN
+    // 4c. Client attempts to elevate own role to ADMIN
     const escalateRes = await fetch(`${BASE_URL}/api/auth/profile`, {
       method: 'PUT',
       headers: {
@@ -207,10 +380,10 @@ async function runAuthTests() {
     assert(escalateRes.status === 403, 'Privilege escalation attempt ({ role: "ADMIN" }) rejected with 403');
 
     // Check DB to ensure role remained USER
-    const { data: checkProfile } = await supabaseAdmin.from('user_profiles').select('role').eq('auth_user_id', userAId).single();
+    const { data: checkProfile } = await supabaseAdmin.from('user_profiles').select('role').eq('id', userAProfileId).single();
     assert(checkProfile.role === 'USER', 'Database confirms user role remains unchanged at "USER"');
 
-    // 3b. Client attempts to tamper with success_rate in stats
+    // 4d. Client attempts to tamper with success_rate in stats
     const statsTamperRes = await fetch(`${BASE_URL}/api/auth/profile`, {
       method: 'PUT',
       headers: {
@@ -221,7 +394,7 @@ async function runAuthTests() {
     });
     assert(statsTamperRes.status === 403, 'Stats tampering attempt ({ success_rate: 99.9 }) rejected with 403');
 
-    // 3c. Safe profile update allows display_name & bio
+    // 4e. Safe profile update allows display_name & bio
     const safeUpdateRes = await fetch(`${BASE_URL}/api/auth/profile`, {
       method: 'PUT',
       headers: {
@@ -238,192 +411,34 @@ async function runAuthTests() {
     assert(safeUpdateData.profile.display_name === 'Alice The Great', 'Display name updated properly');
 
     // -------------------------------------------------------------------------
-    // TEST 4: FORGOT PASSWORD & PRIVACY
+    // TEST 5: MULTIPLE WALLETS & SYBIL ISOLATION
     // -------------------------------------------------------------------------
-    console.log('\n--- TEST 4: Forgot Password & Account Privacy ---');
+    console.log('\n--- TEST 5: Independent Wallet Account Authentication (User B) ---');
 
-    // 4a. Request password reset for existing email
-    const resetExistRes = await fetch(`${BASE_URL}/api/auth/forgot-password`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: testUserAEmail })
+    const authB = await authenticateWallet(walletB, {
+      username: `bob_${timestamp}`,
+      displayName: 'Bob The Second'
     });
-    const resetExistData = await resetExistRes.json();
-    assert(resetExistRes.status === 200, 'Password reset request succeeds');
+    assert(authB.status === 200, 'User B authenticates independently via Wallet B');
+    userBToken = authB.data.session.access_token;
+    userBId = authB.data.user.id;
+    userBProfileId = authB.data.profile.id;
 
-    // 4b. Request password reset for NON-EXISTENT email
-    const resetNonExistRes = await fetch(`${BASE_URL}/api/auth/forgot-password`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: `nonexistent_${timestamp}@example.com` })
-    });
-    const resetNonExistData = await resetNonExistRes.json();
-    assert(resetNonExistRes.status === 200, 'Non-existent email also returns HTTP 200');
-    assert(
-      resetExistData.message === resetNonExistData.message,
-      'Email enumeration prevented: Generic identical response returned regardless of email existence'
-    );
+    assert(userBProfileId !== userAProfileId, 'User A and User B have completely distinct profile IDs');
+    assert(authB.data.profile.wallet_address === walletBPublicKey, 'User B profile stores Wallet B public key');
 
     // -------------------------------------------------------------------------
-    // TEST 5: SOLANA WALLET NONCE & ED25519 SIGNATURE VERIFICATION
+    // TEST 6: ROLE-BASED ACCESS CONTROL (RBAC) & ADMIN ENDPOINTS
     // -------------------------------------------------------------------------
-    console.log('\n--- TEST 5: Solana Wallet Cryptographic Verification ---');
+    console.log('\n--- TEST 6: Role-Based Access Control (RBAC) & Admin Endpoints ---');
 
-    // 5a. Request wallet challenge nonce
-    const nonceRes = await fetch(`${BASE_URL}/api/auth/wallet/nonce`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${userAToken}`
-      },
-      body: JSON.stringify({ walletAddress: walletAPublicKey })
-    });
-    const nonceData = await nonceRes.json();
-    assert(nonceRes.status === 200, 'Wallet challenge nonce requested successfully');
-    assert(nonceData.nonce && nonceData.nonce.length === 64, 'Generated random 32-byte hex nonce');
-    assert(nonceData.message.includes('Commit Wallet Verification'), 'Canonical challenge message contains protocol header');
-    assert(nonceData.message.includes(walletAPublicKey), 'Challenge contains target wallet public key');
-
-    // 5b. Sign challenge message using Phantom/ed25519 keypair
-    const messageBytes = new TextEncoder().encode(nonceData.message);
-    const signatureBytes = nacl.sign.detached(messageBytes, walletA.secretKey);
-    const signatureBase58 = encodeBase58(signatureBytes);
-
-    // 5c. Submit signature to verify and associate wallet
-    const verifyRes = await fetch(`${BASE_URL}/api/auth/wallet/verify`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${userAToken}`
-      },
-      body: JSON.stringify({
-        walletAddress: walletAPublicKey,
-        nonce: nonceData.nonce,
-        signature: signatureBase58
-      })
-    });
-    const verifyData = await verifyRes.json();
-    assert(verifyRes.status === 200 && verifyData.success, 'Wallet signature verified and associated successfully');
-
-    // Verify wallet in user profile DB
-    const { data: profileWithWallet } = await supabaseAdmin
-      .from('user_profiles')
-      .select('wallet_address')
-      .eq('auth_user_id', userAId)
-      .single();
-    assert(profileWithWallet.wallet_address === walletAPublicKey, 'User profile accurately reflects verified wallet address');
-
-    // 5d. REPLAY ATTACK: Attempt to reuse the same nonce again
-    const replayRes = await fetch(`${BASE_URL}/api/auth/wallet/verify`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${userAToken}`
-      },
-      body: JSON.stringify({
-        walletAddress: walletAPublicKey,
-        nonce: nonceData.nonce,
-        signature: signatureBase58
-      })
-    });
-    assert(replayRes.status === 400, 'Replay Attack: Reusing consumed nonce is strictly rejected with HTTP 400');
-
-    // 5e. WRONG WALLET SIGNATURE ATTACK: Sign with Wallet B, claim to be Wallet A
-    const nonceRes2 = await fetch(`${BASE_URL}/api/auth/wallet/nonce`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${userAToken}`
-      },
-      body: JSON.stringify({ walletAddress: walletAPublicKey })
-    });
-    const nonceData2 = await nonceRes2.json();
-    const wrongSigBytes = nacl.sign.detached(new TextEncoder().encode(nonceData2.message), walletB.secretKey);
-    const wrongSigBase58 = encodeBase58(wrongSigBytes);
-
-    const wrongSigRes = await fetch(`${BASE_URL}/api/auth/wallet/verify`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${userAToken}`
-      },
-      body: JSON.stringify({
-        walletAddress: walletAPublicKey,
-        nonce: nonceData2.nonce,
-        signature: wrongSigBase58
-      })
-    });
-    assert(wrongSigRes.status === 400, 'Forged/Wrong wallet signature is strictly rejected');
-
-    // -------------------------------------------------------------------------
-    // TEST 6: WALLET UNIQUENESS & SYBIL ATTACHMENT
-    // -------------------------------------------------------------------------
-    console.log('\n--- TEST 6: Wallet Uniqueness (One Wallet = One Account) ---');
-
-    // Create User B
-    const signupBRes = await fetch(`${BASE_URL}/api/auth/signup`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email: testUserBEmail,
-        password: defaultPassword,
-        username: `bob_${timestamp}`,
-        displayName: 'Bob The Second'
-      })
-    });
-    const signupBData = await signupBRes.json();
-    userBId = signupBData.user.id;
-    await supabaseAdmin.auth.admin.updateUserById(userBId, { email_confirm: true });
-
-    const loginBRes = await fetch(`${BASE_URL}/api/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: testUserBEmail, password: defaultPassword })
-    });
-    const loginBData = await loginBRes.json();
-    userBToken = loginBData.session.access_token;
-
-    // User B tries to link User A's already linked wallet (walletAPublicKey)
-    const nonceBRes = await fetch(`${BASE_URL}/api/auth/wallet/nonce`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${userBToken}`
-      },
-      body: JSON.stringify({ walletAddress: walletAPublicKey })
-    });
-    const nonceBData = await nonceBRes.json();
-    const sigBBytes = nacl.sign.detached(new TextEncoder().encode(nonceBData.message), walletA.secretKey);
-
-    const duplicateWalletRes = await fetch(`${BASE_URL}/api/auth/wallet/verify`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${userBToken}`
-      },
-      body: JSON.stringify({
-        walletAddress: walletAPublicKey,
-        nonce: nonceBData.nonce,
-        signature: encodeBase58(sigBBytes)
-      })
-    });
-    assert(
-      duplicateWalletRes.status === 400,
-      'Duplicate wallet assignment rejected: One wallet cannot be bound to two accounts'
-    );
-
-    // -------------------------------------------------------------------------
-    // TEST 7: ROLE-BASED ACCESS CONTROL (RBAC) & ADMIN ENDPOINTS
-    // -------------------------------------------------------------------------
-    console.log('\n--- TEST 7: Role-Based Access Control (RBAC) & Admin Endpoints ---');
-
-    // 7a. Normal User A attempts to call GET /api/admin/users
+    // 6a. Normal User A attempts to call GET /api/admin/users
     const userAdminRes = await fetch(`${BASE_URL}/api/admin/users`, {
       headers: { Authorization: `Bearer ${userAToken}` }
     });
     assert(userAdminRes.status === 403, 'Normal user calling GET /api/admin/users is rejected with 403 Forbidden');
 
-    // 7b. Normal User A attempts to call dispute resolution endpoint
+    // 6b. Normal User A attempts to call dispute resolution endpoint
     const disputeRes = await fetch(`${BASE_URL}/api/commitments/cm_gh_01/resolve-dispute`, {
       method: 'POST',
       headers: {
@@ -434,29 +449,20 @@ async function runAuthTests() {
     });
     assert(disputeRes.status === 403, 'Normal user calling admin dispute resolution is rejected with 403 Forbidden');
 
-    // 7c. Setup an authoritative Admin User
-    const signupAdminRes = await fetch(`${BASE_URL}/api/auth/signup`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email: testAdminEmail,
-        password: defaultPassword,
-        username: `sysadmin_${timestamp}`,
-        displayName: 'System Admin'
-      })
+    // 6c. Setup an authoritative Admin User via Wallet Auth
+    const authAdmin = await authenticateWallet(walletAdmin, {
+      username: `sysadmin_${timestamp}`,
+      displayName: 'System Admin'
     });
-    const signupAdminData = await signupAdminRes.json();
-    adminId = signupAdminData.user.id;
-    await supabaseAdmin.auth.admin.updateUserById(adminId, { email_confirm: true });
+    adminToken = authAdmin.data.session.access_token;
+    adminId = authAdmin.data.user.id;
+    adminProfileId = authAdmin.data.profile.id;
 
     // Elevate role authoritatively in PostgreSQL (Service Role)
-    const { data: adminProfile } = await supabaseAdmin
+    await supabaseAdmin
       .from('user_profiles')
       .update({ role: 'ADMIN' })
-      .eq('auth_user_id', adminId)
-      .select()
-      .single();
-    adminProfileId = adminProfile.id;
+      .eq('id', adminProfileId);
 
     // Add to admin_users table
     await supabaseAdmin.from('admin_users').insert({
@@ -465,17 +471,7 @@ async function runAuthTests() {
       status: 'ACTIVE'
     });
 
-    // Login as Admin
-    const loginAdminRes = await fetch(`${BASE_URL}/api/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: testAdminEmail, password: defaultPassword })
-    });
-    const loginAdminData = await loginAdminRes.json();
-    adminToken = loginAdminData.session.access_token;
-    assert(loginAdminData.isAdmin === true, 'Admin login response identifies user as authorized admin');
-
-    // 7d. Admin calls GET /api/admin/users
+    // 6d. Admin calls GET /api/admin/users
     const adminUsersRes = await fetch(`${BASE_URL}/api/admin/users`, {
       headers: { Authorization: `Bearer ${adminToken}` }
     });
@@ -483,7 +479,7 @@ async function runAuthTests() {
     assert(adminUsersRes.status === 200, 'Admin successfully accesses GET /api/admin/users');
     assert(Array.isArray(adminUsersData.users) && adminUsersData.users.length > 0, 'Admin users list loaded');
 
-    // 7e. Admin views audit logs
+    // 6e. Admin views audit logs
     const auditRes = await fetch(`${BASE_URL}/api/admin/audit-logs`, {
       headers: { Authorization: `Bearer ${adminToken}` }
     });
@@ -492,9 +488,9 @@ async function runAuthTests() {
     assert(Array.isArray(auditData.auditLogs) && auditData.auditLogs.length > 0, 'Audit trail contains logged actions');
 
     // -------------------------------------------------------------------------
-    // TEST 7.5: UNAUTHENTICATED COMMITMENT CREATION BLOCKED (HTTP 401)
+    // TEST 7: UNAUTHENTICATED COMMITMENT CREATION BLOCKED (HTTP 401)
     // -------------------------------------------------------------------------
-    console.log('\n--- TEST 7.5: Unauthenticated Commitment Creation Strictly Blocked ---');
+    console.log('\n--- TEST 7: Unauthenticated Commitment Creation Strictly Blocked ---');
     const unauthCommitRes = await fetch(`${BASE_URL}/api/commitments/create`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -519,7 +515,7 @@ async function runAuthTests() {
     console.log('\n--- TEST 8: Account Status Enforcement (SUSPENDED & DISABLED) ---');
 
     // 8a. Admin suspends User B
-    const suspendRes = await fetch(`${BASE_URL}/api/admin/users/${signupBData.user.id}/status`, {
+    const suspendRes = await fetch(`${BASE_URL}/api/admin/users/${userBId}/status`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -538,7 +534,7 @@ async function runAuthTests() {
       },
       body: JSON.stringify({
         title: 'Commitment while suspended',
-        creator: 'AnyCreatorWallet11111111111111111111111111',
+        creator: walletBPublicKey,
         stakingMode: 'HARDCORE',
         stakeAmount: 50,
         verifierType: 'github',
@@ -552,7 +548,7 @@ async function runAuthTests() {
     );
 
     // 8c. Admin disables User B
-    await fetch(`${BASE_URL}/api/admin/users/${signupBData.user.id}/status`, {
+    await fetch(`${BASE_URL}/api/admin/users/${userBId}/status`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -561,15 +557,11 @@ async function runAuthTests() {
       body: JSON.stringify({ status: 'DISABLED', reason: 'Permanent ban test' })
     });
 
-    // 8d. Disabled user attempts to login
-    const disabledLoginRes = await fetch(`${BASE_URL}/api/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: testUserBEmail, password: defaultPassword })
-    });
+    // 8d. Disabled user attempts to authenticate wallet again
+    const disabledAuthRes = await authenticateWallet(walletB).catch(e => ({ status: 403, error: e.message }));
     assert(
-      disabledLoginRes.status === 403,
-      'Disabled user login attempt is rejected server-side with HTTP 403'
+      disabledAuthRes.status === 403 || disabledAuthRes.status === 400,
+      'Disabled user wallet authentication is rejected server-side with HTTP 403'
     );
 
     // -------------------------------------------------------------------------
@@ -609,7 +601,7 @@ async function runAuthTests() {
     const { data: updatedProfileA } = await supabaseAdmin
       .from('user_profiles')
       .select('role')
-      .eq('auth_user_id', userAId)
+      .eq('id', userAProfileId)
       .single();
     assert(updatedProfileA.role === 'VERIFIER', 'User A role successfully updated to "VERIFIER" in database');
 

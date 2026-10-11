@@ -48,38 +48,38 @@ async function runFullE2ETest() {
 
   try {
     // -------------------------------------------------------------------------
-    // STEP 1: USER ONBOARDING & SUPABASE AUTH
+    // STEP 1: USER REGISTRATION & AUTHENTICATION VIA SOLANA WALLET
     // -------------------------------------------------------------------------
-    console.log('📦 [1/8] USER REGISTRATION & AUTHENTICATION');
-    const signupRes = await fetch(`${BASE_URL}/api/auth/signup`, {
+    console.log('📦 [1/8] USER REGISTRATION & AUTHENTICATION (SOLANA CONNECT WALLET)');
+    const chalRes = await fetch(`${BASE_URL}/api/auth/wallet/challenge`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ walletAddress: walletPubkey })
+    });
+    const chalData = await chalRes.json();
+    assert(chalRes.status === 200, 'Backend issued random 32-byte challenge nonce for wallet authentication');
+
+    const msgBytes = new TextEncoder().encode(chalData.message);
+    const sigBytes = nacl.sign.detached(msgBytes, keypair.secretKey);
+    const signatureBase58 = encodeBase58(sigBytes);
+
+    const authRes = await fetch(`${BASE_URL}/api/auth/wallet/authenticate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        email: testEmail,
-        password: defaultPassword,
-        confirmPassword: defaultPassword,
+        walletAddress: walletPubkey,
+        nonce: chalData.nonce,
+        signature: signatureBase58,
         username: `e2e_${timestamp}`,
         displayName: 'E2E Challenger'
       })
     });
-    const signupData = await signupRes.json();
-    assert(signupRes.status === 201, 'User registered successfully via /api/auth/signup');
-    userId = signupData.user.id;
-
-    // Confirm email automatically for test flow
-    await supabaseAdmin.auth.admin.updateUserById(userId, { email_confirm: true });
-
-    // Login
-    const loginRes = await fetch(`${BASE_URL}/api/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: testEmail, password: defaultPassword })
-    });
-    const loginData = await loginRes.json();
-    assert(loginRes.status === 200, 'User successfully authenticated via /api/auth/login');
-    assert(loginData.session && loginData.session.access_token, 'Supabase session JWT received');
-    userToken = loginData.session.access_token;
-    userProfileId = loginData.profile.id;
+    const authData = await authRes.json();
+    assert(authRes.status === 200, 'User successfully authenticated via /api/auth/wallet/authenticate');
+    assert(authData.session && authData.session.access_token, 'Supabase session JWT received');
+    userToken = authData.session.access_token;
+    userId = authData.user.id;
+    userProfileId = authData.profile.id;
 
     // Query Profile
     const meRes = await fetch(`${BASE_URL}/api/auth/me`, {
@@ -88,50 +88,23 @@ async function runFullE2ETest() {
     const meData = await meRes.json();
     assert(meRes.status === 200, 'GET /api/auth/me loads profile and stats from PostgreSQL');
     assert(meData.profile.status === 'ACTIVE', 'Account status is strictly ACTIVE');
+    assert(meData.profile.wallet_address === walletPubkey, 'Profile reflects verified wallet public key');
 
     // -------------------------------------------------------------------------
-    // STEP 2: PHANTOM SOLANA WALLET NONCE & SIGNATURE BINDING
+    // STEP 2: CRYPTOGRAPHIC SIGNATURE VERIFICATION & REPLAY DEFENSE
     // -------------------------------------------------------------------------
-    console.log('\n📦 [2/8] CRYPTOGRAPHIC SOLANA WALLET BINDING');
-    // Request challenge nonce
-    const nonceRes = await fetch(`${BASE_URL}/api/auth/wallet/nonce`, {
+    console.log('\n📦 [2/8] CRYPTOGRAPHIC SIGNATURE & REPLAY DEFENSE');
+    const replayRes = await fetch(`${BASE_URL}/api/auth/wallet/authenticate`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${userToken}`
-      },
-      body: JSON.stringify({ walletAddress: walletPubkey })
-    });
-    const nonceData = await nonceRes.json();
-    assert(nonceRes.status === 200, 'Backend issued random 32-byte challenge nonce');
-
-    // Sign message using Ed25519
-    const messageBytes = new TextEncoder().encode(nonceData.message);
-    const signatureBytes = nacl.sign.detached(messageBytes, keypair.secretKey);
-    const signatureBase58 = encodeBase58(signatureBytes);
-
-    // Verify
-    const verifyRes = await fetch(`${BASE_URL}/api/auth/wallet/verify`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${userToken}`
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         walletAddress: walletPubkey,
-        nonce: nonceData.nonce,
+        nonce: chalData.nonce,
         signature: signatureBase58
       })
     });
-    const verifyData = await verifyRes.json();
-    assert(verifyRes.status === 200 && verifyData.success, 'Ed25519 wallet signature verified on server');
-
-    // Confirm wallet attached to profile
-    const meRes2 = await fetch(`${BASE_URL}/api/auth/me`, {
-      headers: { Authorization: `Bearer ${userToken}` }
-    });
-    const meData2 = await meRes2.json();
-    assert(meData2.profile.wallet_address === walletPubkey, 'Profile reflects verified wallet public key');
+    assert(replayRes.status === 400, 'Replay Attack: Reusing consumed challenge nonce is strictly rejected (HTTP 400)');
+    assert(meData.profile.wallet_address === walletPubkey, 'Profile reflects verified wallet public key');
 
     // -------------------------------------------------------------------------
     // STEP 3: CREATE & FUND A REAL COMMITMENT
@@ -324,32 +297,38 @@ async function runFullE2ETest() {
     // -------------------------------------------------------------------------
     console.log('\n📦 [8/8] ADMIN AUTHORIZATION & POSTGRESQL AUDIT TRAIL');
     // Create Admin user
-    const signupAdminRes = await fetch(`${BASE_URL}/api/auth/signup`, {
+    const adminKeypair = nacl.sign.keyPair();
+    const adminWalletPubkey = encodeBase58(adminKeypair.publicKey);
+    const chalAdminRes = await fetch(`${BASE_URL}/api/auth/wallet/challenge`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ walletAddress: adminWalletPubkey })
+    });
+    const chalAdminData = await chalAdminRes.json();
+    const sigAdminBytes = nacl.sign.detached(new TextEncoder().encode(chalAdminData.message), adminKeypair.secretKey);
+    const authAdminRes = await fetch(`${BASE_URL}/api/auth/wallet/authenticate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        email: testAdminEmail,
-        password: defaultPassword,
-        confirmPassword: defaultPassword,
+        walletAddress: adminWalletPubkey,
+        nonce: chalAdminData.nonce,
+        signature: encodeBase58(sigAdminBytes),
         username: `e2e_admin_${timestamp}`,
         displayName: 'E2E System Admin'
       })
     });
-    const signupAdminData = await signupAdminRes.json();
-    adminId = signupAdminData.user.id;
-    await supabaseAdmin.auth.admin.updateUserById(adminId, { email_confirm: true });
+    const authAdminData = await authAdminRes.json();
+    adminId = authAdminData.user.id;
+    adminToken = authAdminData.session.access_token;
+    const adminProfileId = authAdminData.profile.id;
 
     // Elevate in PostgreSQL
-    await supabaseAdmin.from('user_profiles').update({ role: 'ADMIN' }).eq('auth_user_id', adminId);
-
-    // Login as Admin
-    const loginAdminRes = await fetch(`${BASE_URL}/api/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: testAdminEmail, password: defaultPassword })
+    await supabaseAdmin.from('user_profiles').update({ role: 'ADMIN' }).eq('id', adminProfileId);
+    await supabaseAdmin.from('admin_users').insert({
+      user_id: adminProfileId,
+      admin_role: 'ADMIN',
+      status: 'ACTIVE'
     });
-    const loginAdminData = await loginAdminRes.json();
-    adminToken = loginAdminData.session.access_token;
 
     // Retrieve audit logs
     const auditRes = await fetch(`${BASE_URL}/api/admin/audit-logs?limit=50`, {

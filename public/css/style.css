@@ -641,6 +641,133 @@ header {
   margin-bottom: 16px;
 }
 
+/* ============================================================================= */
+/* CONNECT WALLET MODAL & PROVIDER SELECTION STYLES                              */
+/* ============================================================================= */
+.wallet-auth-card {
+  max-width: 480px;
+}
+
+.wallet-auth-lead {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-bottom: 16px;
+}
+
+.wallet-options-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.btn-wallet-provider {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 12px 16px;
+  background: var(--surface-l2);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-inner);
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  color: var(--text-primary);
+  outline: none;
+}
+
+.btn-wallet-provider:hover {
+  background: var(--surface-l3);
+  border-color: var(--sol-purple);
+  box-shadow: 0 4px 18px rgba(99, 102, 241, 0.25);
+  transform: translateY(-1px);
+}
+
+.wallet-provider-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.wallet-icon-emoji {
+  font-size: 24px;
+  line-height: 1;
+}
+
+.wallet-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.wallet-provider-name {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.wallet-provider-status {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+.badge-pill-provider {
+  background: rgba(99, 102, 241, 0.15);
+  color: #a5b4fc;
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+}
+
+.wallet-signing-box {
+  padding: 24px 16px;
+  background: var(--surface-l3);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-inner);
+  text-align: center;
+  margin-top: 12px;
+}
+
+.spinner-solana {
+  width: 36px;
+  height: 36px;
+  margin: 0 auto 14px auto;
+  border: 3px solid rgba(99, 102, 241, 0.2);
+  border-top-color: var(--sol-cyan);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.signing-state-text {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.signing-sub-text {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  margin: 0;
+}
+
+.wallet-onboarding-box {
+  padding: 16px;
+  background: var(--surface-l3);
+  border: 1px solid rgba(20, 241, 149, 0.25);
+  border-radius: var(--radius-inner);
+  margin-top: 14px;
+}
+
 .admin-audit-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .admin-audit-table th { text-align: left; padding: 10px 14px; background: var(--surface-l2); color: var(--text-secondary); font-size: 11px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
 .admin-audit-table td { padding: 12px 14px; border-bottom: 1px solid var(--border-subtle); color: var(--text-primary); }
