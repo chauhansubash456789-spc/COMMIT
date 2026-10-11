@@ -274,6 +274,10 @@ export function getTrustedOrigins() {
     } catch {}
   }
 
+  if (process.env.VERCEL_URL) {
+    origins.push(`https://${process.env.VERCEL_URL}`);
+  }
+
   if (process.env.ALLOWED_ORIGINS) {
     process.env.ALLOWED_ORIGINS.split(',').forEach(item => {
       const trimmed = item.trim();
@@ -324,7 +328,7 @@ export function resolveAndValidateOrigin(requestedOriginOrDomain) {
       } catch {
         return false;
       }
-    });
+    }) || (Boolean(process.env.VERCEL) && parsedUrl.hostname.toLowerCase().endsWith('.vercel.app'));
 
     if (!isTrusted) {
       throw new Error(`Untrusted origin: "${parsedUrl.origin}". Origin does not match configured application origins.`);
@@ -337,7 +341,7 @@ export function resolveAndValidateOrigin(requestedOriginOrDomain) {
   }
 
   // If host/domain without protocol (e.g. "localhost:3000" or "commit.fun")
-  const matchedOrigin = trustedOrigins.find(to => {
+  let matchedOrigin = trustedOrigins.find(to => {
     try {
       const u = new URL(to);
       return u.host.toLowerCase() === str.toLowerCase();
@@ -345,6 +349,10 @@ export function resolveAndValidateOrigin(requestedOriginOrDomain) {
       return false;
     }
   });
+
+  if (!matchedOrigin && Boolean(process.env.VERCEL) && str.toLowerCase().endsWith('.vercel.app')) {
+    matchedOrigin = `https://${str.toLowerCase()}`;
+  }
 
   if (!matchedOrigin) {
     throw new Error(`Untrusted domain: "${str}". Domain does not match any configured trusted application origin.`);

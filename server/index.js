@@ -1259,8 +1259,14 @@ app.post('/api/demo/run', async (req, res) => {
   res.status(400).json({ error: 'Unknown scenario' });
 });
 
-// Launch server
-app.listen(PORT, () => {
-  console.log(`Commit Protocol Node running at http://localhost:${PORT}`);
-  console.log(`Oracle Authority Public Key: ${ORACLE_PUBLIC_KEY}`);
-});
+// Launch server when run directly (standalone Node.js environment)
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`Commit Protocol Node running at http://localhost:${PORT}`);
+    console.log(`Oracle Authority Public Key: ${ORACLE_PUBLIC_KEY}`);
+  });
+}
+
+export { app };
+export default app;
+
