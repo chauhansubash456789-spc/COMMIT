@@ -26,7 +26,7 @@
     const el = document.getElementById(id);
     if (!el) return;
     try {
-      const res = await fetch(file);
+      const res = await fetch(`${file}?v=2.1`, { cache: 'no-cache' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const html = await res.text();
       el.outerHTML = html;
