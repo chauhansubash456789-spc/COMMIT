@@ -2,8 +2,11 @@ import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 dotenv.config();
 
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://gkfuywaflismvlggypkp.supabase.co';
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
+const DEFAULT_SUPABASE_URL = 'https://gkfuywaflismvlggypkp.supabase.co';
+const DEFAULT_SERVICE_ROLE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdrZnV5d2FmbGlzbXZsZ2d5cGtwIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MTE4MDQzNSwiZXhwIjoyMTA2NzU2NDM1fQ.Xvn23--_qt6wsOLF3UM0bILIx8cNlMH3hnwT156cg0M';
+
+const SUPABASE_URL = process.env.SUPABASE_URL || DEFAULT_SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || DEFAULT_SERVICE_ROLE_KEY;
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
