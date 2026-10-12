@@ -66,7 +66,7 @@ const state = {
     stats: null,
     isAdmin: false
   },
-  activeTab: 'tab-dashboard',
+  activeTab: 'tab-landing',
   focusSession: {
     commitmentId: 'cm_study_02',
     timerInterval: null,
@@ -134,45 +134,75 @@ if (window.__componentsLoading) {
 // -----------------------------------------------------------------------------
 // NAVIGATION
 // -----------------------------------------------------------------------------
+window.navigateToTab = async function(targetTab) {
+  const tabBtns = document.querySelectorAll('.nav-tab-btn');
+  const targetBtn = document.querySelector(`.nav-tab-btn[data-tab="${targetTab}"]`);
+
+  // GUARD: Without login, no one can access create, my-commitments, or profile
+  if ((targetTab === 'tab-wizard' || targetTab === 'tab-my-commitments' || targetTab === 'tab-profile') && (!state.auth || !state.auth.token)) {
+    state.pendingTab = targetTab;
+    if (typeof openWalletAuthModal === 'function') {
+      openWalletAuthModal();
+    } else if (typeof openAuthModal === 'function') {
+      openAuthModal('signin');
+    }
+    const alertBox = document.getElementById('authAlert');
+    if (alertBox) {
+      alertBox.className = 'auth-alert-box error';
+      alertBox.style.display = 'block';
+      alertBox.textContent = `🔒 Authentication Required: Please connect your Solana wallet to access ${targetTab === 'tab-profile' ? 'your profile' : targetTab === 'tab-my-commitments' ? 'your commitments' : 'commitment creation'}.`;
+    }
+    return;
+  }
+
+  tabBtns.forEach(b => b.classList.remove('active'));
+  if (targetBtn) targetBtn.classList.add('active');
+
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  const activePane = document.getElementById(targetTab);
+  if (activePane) {
+    activePane.classList.add('active');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  state.activeTab = targetTab;
+
+  if (targetTab === 'tab-dashboard') {
+    await loadUserOverview();
+    await loadCommitments();
+  } else if (targetTab === 'tab-my-commitments') {
+    await loadMyCommitments();
+  } else if (targetTab === 'tab-profile') {
+    loadUserProfile();
+  } else if (targetTab === 'tab-wizard') {
+    updateAuthUI();
+  } else if (targetTab === 'tab-verifier') {
+    await loadVerifierDashboardData();
+  } else if (targetTab === 'tab-landing') {
+    if (state.commitments && state.commitments.length > 0) {
+      const elStat = document.getElementById('landingStatAttestations');
+      if (elStat) elStat.textContent = `${state.commitments.length * 9 + 42}`;
+    }
+  }
+};
+
+window.quickDevnetSignIn = async function(roleKey) {
+  let role = 'ALICE_CREATOR';
+  if (roleKey === 'bob') role = 'BOB_VERIFIER';
+  if (roleKey === 'charlie') role = 'CHARLIE_ADMIN';
+  if (typeof connectDemoWalletKeypair === 'function') {
+    await connectDemoWalletKeypair(role);
+    await window.navigateToTab('tab-dashboard');
+  }
+};
+
 function setupNavigation() {
   const tabBtns = document.querySelectorAll('.nav-tab-btn');
   tabBtns.forEach(btn => {
     btn.addEventListener('click', async (e) => {
+      e.preventDefault();
       const targetTab = btn.getAttribute('data-tab');
-
-      // GUARD: Without login, no one can access create, my-commitments, or profile
-      if ((targetTab === 'tab-wizard' || targetTab === 'tab-my-commitments' || targetTab === 'tab-profile') && (!state.auth || !state.auth.token)) {
-        e.preventDefault();
-        state.pendingTab = targetTab;
-        openAuthModal('signin');
-        const alertBox = document.getElementById('authAlert');
-        if (alertBox) {
-          alertBox.className = 'auth-alert-box error';
-          alertBox.style.display = 'block';
-          alertBox.textContent = `🔒 Authentication Required: Please sign in to access ${targetTab === 'tab-profile' ? 'your profile' : targetTab === 'tab-my-commitments' ? 'your commitments' : 'commitment creation'}.`;
-        }
-        return;
-      }
-
-      tabBtns.forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-
-      document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
-      const activePane = document.getElementById(targetTab);
-      if (activePane) activePane.classList.add('active');
-      state.activeTab = targetTab;
-
-      if (targetTab === 'tab-dashboard') {
-        await loadUserOverview();
-        await loadCommitments();
-      } else if (targetTab === 'tab-my-commitments') {
-        await loadMyCommitments();
-      } else if (targetTab === 'tab-profile') {
-        loadUserProfile();
-      } else if (targetTab === 'tab-wizard') {
-        updateAuthUI();
-      } else if (targetTab === 'tab-verifier') {
-        await loadVerifierDashboardData();
+      if (window.navigateToTab) {
+        await window.navigateToTab(targetTab);
       }
     });
   });

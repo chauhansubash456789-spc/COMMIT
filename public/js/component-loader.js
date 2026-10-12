@@ -8,6 +8,7 @@
   const mounts = [
     { id: 'header-mount', file: 'components/header.html' },
     { id: 'nav-mount', file: 'components/navbar.html' },
+    { id: 'tab-landing-mount', file: 'components/tab-landing.html' },
     { id: 'tab-dashboard-mount', file: 'components/tab-dashboard.html' },
     { id: 'tab-my-commitments-mount', file: 'components/tab-my-commitments.html' },
     { id: 'tab-wizard-mount', file: 'components/tab-wizard.html' },
@@ -26,7 +27,7 @@
     const el = document.getElementById(id);
     if (!el) return;
     try {
-      const res = await fetch(`${file}?v=2.1`, { cache: 'no-cache' });
+      const res = await fetch(`${file}?v=2.2`, { cache: 'no-cache' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const html = await res.text();
       el.outerHTML = html;
